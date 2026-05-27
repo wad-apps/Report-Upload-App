@@ -132,6 +132,8 @@ function renderDriverTable(drivers) {
   // 確認ボタンのイベントを一括登録
   tbody.querySelectorAll('.btn-review').forEach(function(btn) {
     btn.addEventListener('click', function() {
+      btn.disabled = true;
+      btn.textContent = '読み込み中...';
       openOcrScreen(btn.dataset.uid, btn.dataset.name);
     });
   });
