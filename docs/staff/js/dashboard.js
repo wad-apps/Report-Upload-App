@@ -110,6 +110,9 @@ function renderDriverTable(drivers) {
     var ocrTime     = d.ocrTime || '-';
     var btnLabel    = d.isConfirmed ? '確認済み' : '確認する';
     var btnDisabled = d.status !== '確認待ち' && d.status !== '確定' ? 'disabled' : '';
+    var fileLink    = d.fileUrl
+      ? '<a href="' + escHtml(d.fileUrl) + '" target="_blank" class="btn btn-sm btn-ghost">画像 ↗</a>'
+      : '';
     return [
       '<tr>',
       '<td><strong>' + escHtml(d.driverName) + '</strong></td>',
@@ -118,7 +121,8 @@ function renderDriverTable(drivers) {
       '<td>' + billingText + '</td>',
       '<td><span class="badge ' + badgeClass + '">' + d.status + '</span></td>',
       '<td style="color:var(--text-sub);font-size:12px">' + ocrTime + '</td>',
-      '<td><button class="btn btn-sm btn-outline btn-review" ' + btnDisabled +
+      '<td style="display:flex;gap:6px;align-items:center">' + fileLink +
+          '<button class="btn btn-sm btn-outline btn-review" ' + btnDisabled +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
           ' data-name="' + escHtml(d.driverName) + '">' + btnLabel + '</button></td>',
       '</tr>',
@@ -145,7 +149,13 @@ function openOcrScreen(lineUserId, driverName) {
     lineUserId:  lineUserId,
     yearMonth:   state.yearMonth,
   }).then(function(res) {
-    document.getElementById('ocr-file-link').href = res.fileUrl || '#';
+    var fileLinkEl = document.getElementById('ocr-file-link');
+    if (res.fileUrl) {
+      fileLinkEl.href = res.fileUrl;
+      fileLinkEl.classList.remove('hidden');
+    } else {
+      fileLinkEl.classList.add('hidden');
+    }
     document.getElementById('ocr-note-badge').classList.toggle('hidden', !res.hasNote);
     renderOcrTable(res.days, res.driver);
     showScreen('ocr');
