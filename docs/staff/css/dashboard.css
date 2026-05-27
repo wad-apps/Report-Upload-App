@@ -159,6 +159,7 @@ tbody tr:hover { background: #f8f9fa; }
 .badge-OCRエラー { background: #fce8e6; color: #c5221f; }
 
 /* ===== OCR確認画面 ===== */
+#ocr-table tbody td { padding: 4px 16px; }
 .ocr-layout { display: flex; flex-direction: column; gap: 16px; }
 .ocr-table-section {
   background: var(--surface);
