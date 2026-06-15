@@ -312,7 +312,8 @@ function renderAttachments(attachments) {
 }
 
 // ===== 修正保存 =====
-function handleSaveCorrection() {
+// silent=true のとき: トースト非表示、操作ログ非記録（確定前の自動保存用）
+function handleSaveCorrection(silent) {
   var corrections = [];
   document.querySelectorAll('#ocr-tbody tr').forEach(function(row) {
     var startInput = row.querySelector('[data-field="start"]');
@@ -329,17 +330,18 @@ function handleSaveCorrection() {
   btn.disabled = true;
   btn.textContent = '保存中...';
 
-  adminPost({
+  return adminPost({
     action:      'adminSaveCorrection',
     idToken:     state.idToken,
     lineUserId:  state.selectedDriver.lineUserId,
     yearMonth:   state.yearMonth,
     site:        state.selectedDriver.site || '',
     corrections: corrections,
+    silent:      !!silent,
   }).then(function() {
-    showToast('修正を保存しました');
+    if (!silent) showToast('修正を保存しました');
   }).catch(function() {
-    showToast('保存に失敗しました');
+    if (!silent) showToast('保存に失敗しました');
   }).then(function() {
     btn.disabled = false;
     btn.textContent = '修正を保存';
@@ -350,19 +352,26 @@ function handleSaveCorrection() {
 function handleConfirmMonth() {
   if (!confirm(state.selectedDriver.driverName + ' の ' + state.yearMonth + ' を確定します。よろしいですか？')) return;
 
-  // 修正を先に保存してから確定
-  handleSaveCorrection();
+  var confirmBtn = document.getElementById('btn-confirm-month');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = '確定中...';
 
-  adminPost({
-    action:     'adminConfirmMonth',
-    idToken: state.idToken,
-    lineUserId: state.selectedDriver.lineUserId,
-    yearMonth:  state.yearMonth,
-    site:       state.selectedDriver.site || '',
+  // 修正を保存してから確定（silent=true: ログなし・トーストなし）
+  handleSaveCorrection(true).then(function() {
+    return adminPost({
+      action:     'adminConfirmMonth',
+      idToken:    state.idToken,
+      lineUserId: state.selectedDriver.lineUserId,
+      yearMonth:  state.yearMonth,
+      site:       state.selectedDriver.site || '',
+    });
   }).then(function(res) {
     showToast('確定しました。稼働' + res.workingDays + '日 / ¥' + res.billingAmount.toLocaleString());
-    document.getElementById('btn-confirm-month').disabled = true;
-    document.getElementById('btn-confirm-month').textContent = '確定済み';
+    confirmBtn.textContent = '確定済み';
+  }).catch(function() {
+    showToast('確定に失敗しました');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'この月を確定する';
   });
 }
 

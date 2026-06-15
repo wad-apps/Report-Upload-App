@@ -139,7 +139,13 @@ function handleAdminGetDriverList_(payload) {
   // 月報ファイルの親フォルダURLをfileIdから直接取得（フォルダ名依存を避ける）
   var folderUrlByKey = {};
   Object.keys(submissionMap).forEach(function(key) {
-    var fileId = submissionMap[key].fileId;
+    var sub    = submissionMap[key];
+    var fileId = sub.fileId;
+    // fileId 列が空の旧データは fileUrl から抽出
+    if (!fileId && sub.fileUrl) {
+      var m = sub.fileUrl.match(/\/file\/d\/([^\/]+)/);
+      if (m) fileId = m[1];
+    }
     if (!fileId) return;
     try {
       var parents = DriveApp.getFileById(fileId).getParents();
@@ -246,6 +252,11 @@ function handleAdminGetOcrDetail_(payload) {
   }
 
   var driver = getDriverByUserIdAndSite_(lineUserId, site) || {};
+  // fileId 列が空の旧データは fileUrl から抽出
+  if (!fileId && fileUrl) {
+    var fm = fileUrl.match(/\/file\/d\/([^\/]+)/);
+    if (fm) fileId = fm[1];
+  }
   var folderUrl = '';
   if (fileId) {
     try {
@@ -277,6 +288,10 @@ function handleAdminSaveCorrection_(payload, email) {
   var yearMonth   = payload.yearMonth;
   var site        = payload.site || '';
   var corrections = payload.corrections; // [{ day, fixedStart, fixedEnd }]
+  var silent      = !!payload.silent;   // trueのとき操作ログを記録しない（確定前の自動保存用）
+
+  var driver     = getDriverByUserIdAndSite_(lineUserId, site);
+  var driverName = driver ? driver.name : '';
 
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_OCR);
@@ -285,23 +300,29 @@ function handleAdminSaveCorrection_(payload, email) {
   var corrMap = {};
   corrections.forEach(function(c) { corrMap[c.day] = c; });
 
+  var changeCount = 0;
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     // SHEET_OCR: [2]=site, [3]=yearMonth, [4]=day, [5]=ocrStart, [6]=ocrEnd, [7]=isWorking(col8), [8]=status(col9), [9]=fixedStart(col10), [10]=fixedEnd(col11)
     if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) continue;
     var c = corrMap[row[4]];
     if (!c) continue;
-    var ocrStart  = normalizeTime_(row[5]);
-    var ocrEnd    = normalizeTime_(row[6]);
-    var isWorking = c.fixedStart !== '';
+    var ocrStart      = normalizeTime_(row[5]);
+    var ocrEnd        = normalizeTime_(row[6]);
+    var isWorking     = c.fixedStart !== '';
+    var newFixedStart = c.fixedStart !== ocrStart ? c.fixedStart : '';
+    var newFixedEnd   = c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '';
     sheet.getRange(i + 1, 8).setValue(isWorking);
     sheet.getRange(i + 1, 9).setValue('修正済み');
-    sheet.getRange(i + 1, 10).setValue(c.fixedStart !== ocrStart ? c.fixedStart : '');
-    sheet.getRange(i + 1, 11).setValue(c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '');
+    sheet.getRange(i + 1, 10).setValue(newFixedStart);
+    sheet.getRange(i + 1, 11).setValue(newFixedEnd);
+    if (c.fixedStart !== ocrStart || c.fixedEnd !== ocrEnd) changeCount++;
   }
 
   SpreadsheetApp.flush();
-  appendAuditLog_(email, '修正', lineUserId, '', yearMonth, '', corrections.length + '件', '');
+  if (!silent && changeCount > 0) {
+    appendAuditLog_(email, '修正', lineUserId, driverName, yearMonth, '', changeCount + '件', '');
+  }
   return jsonResponse({ status: 'ok' });
 }
 
