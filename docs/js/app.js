@@ -195,13 +195,12 @@ function setupEventListeners() {
 
   document.getElementById('btn-to-line').addEventListener('click', function() {
     if (TAG_REDIRECT_URL) {
-      liff.openWindow({ url: TAG_REDIRECT_URL, external: false });
+      // 流入URLにサイレントアクセスしてタグを登録してからLINEに戻る
+      fetch(TAG_REDIRECT_URL, { mode: 'no-cors' })
+        .catch(function() {})
+        .then(function() { liff.closeWindow(); });
     } else {
-      // 流入URL未設定時はメイン画面に戻る
-      showScreen('main');
-      gasPost({ action: 'getMyReports', lineUserId: state.lineUserId })
-        .then(function(res) { renderReportList(res.reports || []); })
-        .catch(function() {});
+      liff.closeWindow();
     }
   });
 }
