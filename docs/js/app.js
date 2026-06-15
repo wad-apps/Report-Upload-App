@@ -276,9 +276,15 @@ function handleSubmit() {
   var alreadySubmitted = state.reports.some(function(r) { return r.yearMonth === yearMonth; });
   if (alreadySubmitted) {
     var ym = yearMonth.replace('-', '年') + '月';
-    if (!confirm(ym + '分の月報はすでに提出済みです。上書きして再提出しますか？')) return;
+    showConfirm(ym + '分の月報はすでに提出済みです。上書きして再提出しますか？', function() {
+      doSubmit(yearMonth);
+    });
+    return;
   }
+  doSubmit(yearMonth);
+}
 
+function doSubmit(yearMonth) {
   var uploadId = Math.random().toString(36).substr(2, 6).toUpperCase();
 
   showOverlay(true);
@@ -300,6 +306,18 @@ function handleSubmit() {
       showOverlay(false);
       showToast('送信失敗: ' + err.message);
     });
+}
+
+function showConfirm(message, onOk) {
+  document.getElementById('confirm-msg').textContent = message;
+  document.getElementById('confirm-overlay').classList.remove('hidden');
+  document.getElementById('btn-confirm-ok').onclick = function() {
+    document.getElementById('confirm-overlay').classList.add('hidden');
+    onOk();
+  };
+  document.getElementById('btn-confirm-cancel').onclick = function() {
+    document.getElementById('confirm-overlay').classList.add('hidden');
+  };
 }
 
 function uploadAttachments(yearMonth, files, index, uploadId) {

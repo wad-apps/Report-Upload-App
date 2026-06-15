@@ -127,7 +127,8 @@ function renderDriverTable(drivers) {
       '<td style="display:flex;gap:6px;align-items:center">' + fileLink + folderLink +
           '<button class="btn btn-sm btn-outline btn-review" ' + btnDisabled +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
-          ' data-name="' + escHtml(d.driverName) + '">' + btnLabel + '</button></td>',
+          ' data-name="' + escHtml(d.driverName) + '"' +
+          ' data-folder="' + escHtml(d.folderUrl || '') + '">' + btnLabel + '</button></td>',
       '</tr>',
     ].join('');
   }).join('');
@@ -137,16 +138,24 @@ function renderDriverTable(drivers) {
     btn.addEventListener('click', function() {
       btn.disabled = true;
       btn.textContent = '読み込み中...';
-      openOcrScreen(btn.dataset.uid, btn.dataset.name);
+      openOcrScreen(btn.dataset.uid, btn.dataset.name, btn.dataset.folder);
     });
   });
 }
 
 // ===== OCR確認画面 =====
-function openOcrScreen(lineUserId, driverName) {
+function openOcrScreen(lineUserId, driverName, folderUrl) {
   state.selectedDriver = { lineUserId: lineUserId, driverName: driverName };
   document.getElementById('ocr-header-title').textContent = driverName + '　' + state.yearMonth;
   document.getElementById('btn-confirm-month').disabled = true;
+
+  var folderLinkEl = document.getElementById('ocr-folder-link');
+  if (folderUrl) {
+    folderLinkEl.href = folderUrl;
+    folderLinkEl.classList.remove('hidden');
+  } else {
+    folderLinkEl.classList.add('hidden');
+  }
 
   adminPost({
     action:      'adminGetOcrDetail',
