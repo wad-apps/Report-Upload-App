@@ -113,10 +113,11 @@ function loadDashboard() {
       document.getElementById('stat-pending').textContent   = res.stats.pending;
       document.getElementById('stat-confirmed').textContent = res.stats.confirmed;
       document.getElementById('stat-error').textContent     = res.stats.ocrError;
-    });
+    }).catch(function() {});
 
   adminPost({ action: 'adminGetDriverList', idToken: state.idToken, yearMonth: ym })
-    .then(function(res) { renderDriverTable(res.drivers); });
+    .then(function(res) { renderDriverTable(res.drivers); })
+    .catch(function() {});
 }
 
 // ===== ドライバー一覧レンダリング =====
@@ -184,7 +185,7 @@ function openOcrScreen(lineUserId, driverName, site, folderUrl) {
 
   adminPost({
     action:      'adminGetOcrDetail',
-    adminToken:  state.token,
+    idToken:     state.idToken,
     lineUserId:  lineUserId,
     yearMonth:   state.yearMonth,
     site:        site || '',
@@ -202,6 +203,8 @@ function openOcrScreen(lineUserId, driverName, site, folderUrl) {
     renderNoteText(res.noteText || '');
     renderAttachments(res.attachments || []);
     showScreen('ocr');
+  }).catch(function(err) {
+    if (err.message !== 'unauthorized') showToast('データの読み込みに失敗しました');
   });
 }
 
@@ -315,7 +318,7 @@ function handleSaveCorrection() {
 
   adminPost({
     action:      'adminSaveCorrection',
-    adminToken:  state.token,
+    idToken:     state.idToken,
     lineUserId:  state.selectedDriver.lineUserId,
     yearMonth:   state.yearMonth,
     site:        state.selectedDriver.site || '',
