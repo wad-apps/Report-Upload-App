@@ -48,6 +48,13 @@
         <button class="btn btn-cancel" id="btn-cancel-file">✕ 選択し直す</button>
       </section>
 
+      <section class="card" id="attachment-section">
+        <p class="section-title">添付ファイル（任意）</p>
+        <div id="attachment-list"></div>
+        <input type="file" id="attachment-input" accept="image/*,application/pdf" class="file-input-hidden" multiple>
+        <button class="btn btn-attachment" id="btn-add-attachment">＋ 添付ファイルを追加</button>
+      </section>
+
       <section class="card checklist-section" id="checklist-section">
         <p class="checklist-title">送信前に確認してください</p>
         <label class="checklist-item"><input type="checkbox" class="submit-check" id="chk1"> 本請求書を月末最終稼働日に提出する</label>
@@ -74,7 +81,7 @@
   <div id="overlay-uploading" class="overlay hidden">
     <div class="overlay-inner">
       <div class="spinner"></div>
-      <p>送信中...</p>
+      <p id="overlay-text">送信中...</p>
     </div>
   </div>
 

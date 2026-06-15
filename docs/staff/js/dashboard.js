@@ -162,6 +162,7 @@ function openOcrScreen(lineUserId, driverName) {
     renderOcrTable(res.days, res.driver);
     renderExpenses(res.expenses || []);
     renderNoteText(res.noteText || '');
+    renderAttachments(res.attachments || []);
     showScreen('ocr');
   });
 }
@@ -242,6 +243,19 @@ function renderExpenses(expenses) {
 function renderNoteText(noteText) {
   var el = document.getElementById('note-content');
   el.textContent = noteText || '（記載なし）';
+}
+
+function renderAttachments(attachments) {
+  var el = document.getElementById('attachment-links');
+  if (!attachments || attachments.length === 0) {
+    el.innerHTML = '<span class="empty-cell" style="display:block;padding:12px 20px">添付なし</span>';
+    return;
+  }
+  el.innerHTML = attachments.map(function(a, i) {
+    var label = escHtml(a.fileName || ('添付' + (i + 1)));
+    return '<a href="' + escHtml(a.fileUrl) + '" target="_blank" class="attachment-link">' +
+      (i + 1) + '. ' + label + ' ↗</a>';
+  }).join('');
 }
 
 // ===== 修正保存 =====

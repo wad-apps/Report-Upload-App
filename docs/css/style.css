@@ -284,5 +284,45 @@ body {
   color: var(--text);
 }
 
+/* ===== 添付ファイル ===== */
+.btn-attachment {
+  width: 100%;
+  background: transparent;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.attachment-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.attachment-item:last-of-type { border-bottom: none; margin-bottom: 8px; }
+.attachment-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-remove-attachment {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
 /* ===== ユーティリティ ===== */
 .hidden { display: none !important; }

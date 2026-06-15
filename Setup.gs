@@ -23,6 +23,10 @@ function setupSheets() {
     {
       name: SHEET_EXPENSE,
       headers: ['LINEユーザーID', 'ドライバー名', '年月', '行番号', '区分', '金額', '内容', '確認ステータス', '受信ファイルID']
+    },
+    {
+      name: SHEET_ATTACHMENT,
+      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'インデックス', 'ファイル名', 'DriveファイルID', 'DriveURL']
     }
   ];
 

@@ -163,13 +163,29 @@ function handleAdminGetOcrDetail_(payload) {
     expenses.sort(function(a, b) { return a.row - b.row; });
   }
 
+  // 添付ファイル
+  var attachments = [];
+  var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);
+  if (attSheet) {
+    attSheet.getDataRange().getValues().slice(1).forEach(function(row) {
+      if (row[1] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth) return;
+      attachments.push({
+        index:    row[4],
+        fileName: row[5],
+        fileUrl:  row[7],
+      });
+    });
+    attachments.sort(function(a, b) { return a.index - b.index; });
+  }
+
   return jsonResponse({
-    days:     days,
-    fileUrl:  fileUrl,
-    driver:   getDriverByUserId(lineUserId) || {},
-    yearMonth: yearMonth,
-    expenses: expenses,
-    noteText: noteText,
+    days:        days,
+    fileUrl:     fileUrl,
+    driver:      getDriverByUserId(lineUserId) || {},
+    yearMonth:   yearMonth,
+    expenses:    expenses,
+    noteText:    noteText,
+    attachments: attachments,
   });
 }
 

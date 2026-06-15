@@ -6,7 +6,8 @@ var SHEET_RECEIVED = '月報受信ファイル';
 var SHEET_OCR      = 'OCR結果データ';
 var SHEET_DRIVER   = 'ドライバーマスタ';
 var SHEET_MONTHLY  = '月次確定';
-var SHEET_EXPENSE  = '立替明細';
+var SHEET_EXPENSE     = '立替明細';
+var SHEET_ATTACHMENT  = '添付ファイル';
 
 // ===== ルーティング =====
 
@@ -27,8 +28,9 @@ function doPost(e) {
     switch (action) {
       case 'bootstrap':     return handleBootstrap(payload);
       case 'getProfile':    return handleGetProfile(payload);
-      case 'uploadReport':  return handleUploadReport(payload);
-      case 'getMyReports':  return handleGetMyReports(payload);
+      case 'uploadReport':     return handleUploadReport(payload);
+      case 'uploadAttachment': return handleUploadAttachment(payload);
+      case 'getMyReports':     return handleGetMyReports(payload);
       case 'adminGetOverview':
       case 'adminGetDriverList':
       case 'adminGetOcrDetail':
@@ -116,6 +118,34 @@ function handleUploadReport(payload) {
     fileUrl:     fileUrl,
     workingDays: ocrResult ? ocrResult.workingDays : null,
   });
+}
+
+function handleUploadAttachment(payload) {
+  var driver = getDriverByUserId(payload.lineUserId);
+  if (!driver) return jsonResponse({ error: 'unauthorized' });
+
+  var yearMonth = payload.yearMonth;
+  var mimeType  = payload.mimeType || 'image/jpeg';
+  var base64    = payload.fileBase64;
+  var fileName  = payload.fileName || ('attachment_' + yearMonth + '_' + (payload.index + 1));
+
+  var fileId  = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
+  var fileUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
+
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_ATTACHMENT);
+  sheet.appendRow([
+    new Date(),         // [0] タイムスタンプ
+    driver.lineUserId,  // [1] LINEユーザーID
+    driver.name,        // [2] ドライバー名
+    yearMonth,          // [3] 年月
+    payload.index || 0, // [4] インデックス
+    fileName,           // [5] ファイル名
+    fileId,             // [6] DriveファイルID
+    fileUrl,            // [7] DriveURL
+  ]);
+
+  return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl });
 }
 
 function handleGetMyReports(payload) {

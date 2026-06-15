@@ -5,11 +5,12 @@ var TAG_REDIRECT_URL = 'https://webhook.site/f549c80d-9d4d-4d22-84b2-e98310c8ab6
 
 // ===== 状態 =====
 var state = {
-  lineUserId:  null,
-  displayName: null,
-  driver:      null,
-  selectedFile: null,
+  lineUserId:       null,
+  displayName:      null,
+  driver:           null,
+  selectedFile:     null,
   selectedMimeType: null,
+  attachmentFiles:  [],
 };
 
 // ===== 初期化 =====
@@ -189,6 +190,22 @@ function setupEventListeners() {
   document.getElementById('btn-cancel-file').addEventListener('click', clearFileSelection);
   document.getElementById('btn-submit').addEventListener('click', handleSubmit);
 
+  document.getElementById('btn-add-attachment').addEventListener('click', function() {
+    document.getElementById('attachment-input').click();
+  });
+  document.getElementById('attachment-input').addEventListener('change', function(e) {
+    var files = e.target.files;
+    if (!files || !files.length) return;
+    var over = state.attachmentFiles.length + files.length > 10;
+    var addCount = Math.min(files.length, 10 - state.attachmentFiles.length);
+    for (var i = 0; i < addCount; i++) {
+      state.attachmentFiles.push(files[i]);
+    }
+    if (over) showToast('添付ファイルは最大10件です');
+    renderAttachmentList();
+    e.target.value = '';
+  });
+
   document.querySelectorAll('.submit-check').forEach(function(cb) {
     cb.addEventListener('change', updateSubmitEnabled);
   });
@@ -254,8 +271,14 @@ function handleSubmit() {
   if (!state.lineUserId)   { showToast('ログインし直してください'); return; }
 
   showOverlay(true);
+  updateOverlayText('送信中...');
 
   uploadReport(yearMonth, state.selectedFile)
+    .then(function() {
+      if (state.attachmentFiles.length === 0) return Promise.resolve();
+      updateOverlayText('添付ファイルをアップロード中... 1/' + state.attachmentFiles.length);
+      return uploadAttachments(yearMonth, state.attachmentFiles, 0);
+    })
     .then(function() {
       showOverlay(false);
       var ym = yearMonth.replace('-', '年') + '月';
@@ -266,6 +289,90 @@ function handleSubmit() {
       showOverlay(false);
       showToast('送信失敗: ' + err.message);
     });
+}
+
+function uploadAttachments(yearMonth, files, index) {
+  if (index >= files.length) return Promise.resolve();
+  var file = files[index];
+
+  var getBase64 = file.type === 'application/pdf'
+    ? new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) { resolve(e.target.result.split(',')[1]); };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      })
+    : resizeImage(file);
+
+  return getBase64.then(function(base64) {
+    return gasPost({
+      action:     'uploadAttachment',
+      lineUserId: state.lineUserId,
+      yearMonth:  yearMonth,
+      mimeType:   file.type.startsWith('image/') ? 'image/jpeg' : file.type,
+      fileBase64: base64,
+      fileName:   file.name,
+      index:      index,
+    });
+  }).then(function() {
+    var next = index + 1;
+    if (next < files.length) {
+      updateOverlayText('添付ファイルをアップロード中... ' + (next + 1) + '/' + files.length);
+    }
+    return uploadAttachments(yearMonth, files, next);
+  });
+}
+
+function resizeImage(file) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var MAX   = 2000;
+      var scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      var w     = Math.round(img.width  * scale);
+      var h     = Math.round(img.height * scale);
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ===== 添付ファイル =====
+
+function renderAttachmentList() {
+  var list = document.getElementById('attachment-list');
+  if (state.attachmentFiles.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = state.attachmentFiles.map(function(file, i) {
+    var span = document.createElement('span');
+    span.textContent = file.name;
+    return '<div class="attachment-item">' +
+      '<span class="attachment-name">' + escHtml(file.name) + '</span>' +
+      '<button class="btn-remove-attachment" data-index="' + i + '">✕</button>' +
+      '</div>';
+  }).join('');
+  list.querySelectorAll('.btn-remove-attachment').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      state.attachmentFiles.splice(parseInt(btn.dataset.index, 10), 1);
+      renderAttachmentList();
+    });
+  });
+}
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ===== 提出履歴 =====
@@ -319,6 +426,10 @@ function updateDriverInfo(driver) {
 function showOverlay(visible) {
   var el = document.getElementById('overlay-uploading');
   visible ? el.classList.remove('hidden') : el.classList.add('hidden');
+}
+
+function updateOverlayText(text) {
+  document.getElementById('overlay-text').textContent = text;
 }
 
 var toastTimer = null;
