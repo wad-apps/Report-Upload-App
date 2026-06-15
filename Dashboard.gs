@@ -142,8 +142,12 @@ function handleAdminGetOcrDetail_(payload) {
 
   var recvData = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
   var fileUrl  = '';
+  var noteText = '';
   recvData.slice(1).forEach(function(row) {
-    if (row[1] === lineUserId && normalizeYearMonth_(row[3]) === yearMonth) fileUrl = row[6];
+    if (row[1] === lineUserId && normalizeYearMonth_(row[3]) === yearMonth) {
+      fileUrl  = row[6];
+      noteText = row[11] || '';
+    }
   });
 
   var hasNote = days.some(function(d) { return d.noteFlag === true || d.noteFlag === 'TRUE'; });
@@ -175,6 +179,7 @@ function handleAdminGetOcrDetail_(payload) {
     hasNote:      hasNote,
     expenses:     expenses,
     mismatchDays: mismatchDays,
+    noteText:     noteText,
   });
 }
 

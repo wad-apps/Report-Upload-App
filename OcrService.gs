@@ -21,13 +21,14 @@ var OCR_PROMPT_DAYS = [
 var OCR_PROMPT_META = [
   '下部の「立替経費」欄と「備考」欄だけを読み取り、次のJSON形式のみで返してください。',
   '',
-  '{"expenses":[{"category":"高速代","amount":1200,"note":null}],"hasNote":false}',
+  '{"expenses":[{"category":"高速代","amount":1200,"note":"○○IC"}],"hasNote":true,"noteText":"特記事項のテキスト"}',
   '',
   '- category: 塗られた区分（高速代／燃料代／駐車場／その他 のいずれか）',
   '- amount: 金額の整数（円）。読めなければnull',
-  '- note: 区分が「その他」のときの内容。なければnull',
+  '- note: その行に書かれた補足テキスト（経由地・店名・「その他」の内容など）。なければnull',
   '- 区分も金額もない空行は配列に含めない',
   '- hasNote: 備考欄に記載があればtrue',
+  '- noteText: 備考欄の記載内容テキスト。hasNoteがtrueのときに内容を入れる。なければnull',
   '- JSONブロックのみを返し説明文は不要',
 ].join('\n');
 
@@ -44,6 +45,7 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
     var days;
     var hasNote  = false;
     var expenses = [];
+    var noteText = '';
 
     if (pdfBase64) {
       // PDF: DAYS と META を同一PDFに対し2パスで読む
@@ -54,6 +56,7 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
       days     = daysResult.days;
       hasNote  = metaResult.hasNote;
       expenses = metaResult.expenses;
+      noteText = metaResult.noteText;
     } else {
       // 画像: 前半・後半で DAYS プロンプト（2回）、後半のみで META プロンプト（1回）
       var promptFirst  = OCR_PROMPT_DAYS + '\n\n【補足】これは月報の前半部分の画像です。';
@@ -69,11 +72,15 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
       var metaResult = parseMetaResult_(metaRaw);
       hasNote  = metaResult.hasNote;
       expenses = metaResult.expenses;
+      noteText = metaResult.noteText;
     }
 
     writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days, hasNote);
     if (expenses.length > 0) {
       saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses);
+    }
+    if (noteText) {
+      updateReceivedNoteText_(fileId, noteText);
     }
     updateReceivedFileStatus_(fileId, '確認待ち');
     updateReceivedOcrTime_(fileId);
@@ -133,15 +140,16 @@ function parseDaysResult_(text) {
 
 function parseMetaResult_(text) {
   var match = text.match(/\{[\s\S]*\}/);
-  if (!match) return { expenses: [], hasNote: false };
+  if (!match) return { expenses: [], hasNote: false, noteText: '' };
   try {
     var parsed = JSON.parse(match[0]);
     return {
       expenses: parsed.expenses || [],
       hasNote:  !!parsed.hasNote,
+      noteText: parsed.noteText || '',
     };
   } catch (e) {
-    return { expenses: [], hasNote: false };
+    return { expenses: [], hasNote: false, noteText: '' };
   }
 }
 
@@ -259,6 +267,18 @@ function updateReceivedFileStatus_(fileId, status) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][5] === fileId) {
       sheet.getRange(i + 1, 8).setValue(status);
+      return;
+    }
+  }
+}
+
+function updateReceivedNoteText_(fileId, noteText) {
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_RECEIVED);
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][5] === fileId) {
+      sheet.getRange(i + 1, 12).setValue(noteText); // 列[11] = 備考テキスト
       return;
     }
   }

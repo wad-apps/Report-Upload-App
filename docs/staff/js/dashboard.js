@@ -171,6 +171,7 @@ function openOcrScreen(lineUserId, driverName) {
 
     renderOcrTable(res.days, res.driver);
     renderExpenses(res.expenses || []);
+    renderNoteText(res.noteText || '');
     showScreen('ocr');
   });
 }
@@ -252,6 +253,11 @@ function renderExpenses(expenses) {
       '</tr>',
     ].join('');
   }).join('');
+}
+
+function renderNoteText(noteText) {
+  var el = document.getElementById('note-content');
+  el.textContent = noteText || '（記載なし）';
 }
 
 // ===== 修正保存 =====

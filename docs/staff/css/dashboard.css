@@ -299,5 +299,12 @@ tbody tr:hover { background: #f8f9fa; }
 }
 .expense-section { margin-top: 4px; }
 .expense-title { font-size: 14px; font-weight: 600; }
+.note-content {
+  padding: 12px 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--text);
+}
 
 .hidden { display: none !important; }
