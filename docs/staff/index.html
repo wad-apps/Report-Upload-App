@@ -95,14 +95,10 @@
 
         <!-- 日別データテーブル -->
         <section class="ocr-table-section">
-          <div id="mismatch-banner" class="mismatch-banner hidden">
-            要確認：稼働と開始時間の不一致 <span id="mismatch-count">0</span>件
-          </div>
           <div class="ocr-summary" id="ocr-summary">
             <span>単価: <strong id="ocr-unit-price">-</strong></span>
             <span>稼働日数: <strong id="ocr-working-days">-</strong> 日</span>
             <span>請求合計: <strong id="ocr-billing">-</strong></span>
-            <span id="ocr-note-badge" class="flag-badge note hidden">備考あり</span>
           </div>
           <div class="table-wrap">
             <table id="ocr-table">
@@ -112,7 +108,6 @@
                   <th>開始時間</th>
                   <th>終了時間</th>
                   <th>稼働</th>
-                  <th>突合</th>
                 </tr>
               </thead>
               <tbody id="ocr-tbody"></tbody>

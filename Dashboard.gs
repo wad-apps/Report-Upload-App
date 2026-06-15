@@ -78,7 +78,7 @@ function handleAdminGetDriverList_(payload) {
   ocrData.slice(1).forEach(function(row) {
     if (normalizeYearMonth_(row[2]) !== yearMonth) return;
     var uid       = row[0];
-    var startVal  = row[10] || row[4]; // 修正後開始時間 or OCR開始時間
+    var startVal  = row[8] || row[4]; // 修正後開始時間 or OCR開始時間
     var isWorking = startVal !== '' && startVal !== null;
     if (isWorking) workingDaysMap[uid] = (workingDaysMap[uid] || 0) + 1;
   });
@@ -125,17 +125,13 @@ function handleAdminGetOcrDetail_(payload) {
   ocrData.slice(1).forEach(function(row) {
     if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth) return;
     days.push({
-      day:         row[3],
-      start:       normalizeTime_(row[4]),
-      end:         normalizeTime_(row[5]),
-      isWorking:   row[6],
-      expenseFlag: row[7],
-      noteFlag:    row[8],
-      status:      row[9],
-      fixedStart:  normalizeTime_(row[10]),
-      fixedEnd:    normalizeTime_(row[11]),
-      workedMark:  row[13] === '' ? null : row[13],
-      match:       row[14] || '',
+      day:        row[3],
+      start:      normalizeTime_(row[4]),
+      end:        normalizeTime_(row[5]),
+      isWorking:  row[6],
+      status:     row[7],
+      fixedStart: normalizeTime_(row[8]),
+      fixedEnd:   normalizeTime_(row[9]),
     });
   });
   days.sort(function(a, b) { return a.day - b.day; });
@@ -149,8 +145,6 @@ function handleAdminGetOcrDetail_(payload) {
       noteText = row[11] || '';
     }
   });
-
-  var hasNote = days.some(function(d) { return d.noteFlag === true || d.noteFlag === 'TRUE'; });
 
   // 立替明細
   var expenses = [];
@@ -169,17 +163,13 @@ function handleAdminGetOcrDetail_(payload) {
     expenses.sort(function(a, b) { return a.row - b.row; });
   }
 
-  var mismatchDays = days.filter(function(d) { return d.match === '不一致'; }).map(function(d) { return d.day; });
-
   return jsonResponse({
-    days:         days,
-    fileUrl:      fileUrl,
-    driver:       getDriverByUserId(lineUserId) || {},
-    yearMonth:    yearMonth,
-    hasNote:      hasNote,
-    expenses:     expenses,
-    mismatchDays: mismatchDays,
-    noteText:     noteText,
+    days:     days,
+    fileUrl:  fileUrl,
+    driver:   getDriverByUserId(lineUserId) || {},
+    yearMonth: yearMonth,
+    expenses: expenses,
+    noteText: noteText,
   });
 }
 
@@ -203,10 +193,10 @@ function handleAdminSaveCorrection_(payload) {
     var c = corrMap[row[3]];
     if (!c) continue;
     var isWorking = c.fixedStart !== '';
-    sheet.getRange(i + 1, 7).setValue(isWorking);     // 稼働フラグ
-    sheet.getRange(i + 1, 10).setValue('修正済み');    // 確認ステータス
-    sheet.getRange(i + 1, 11).setValue(c.fixedStart); // 修正後開始時間
-    sheet.getRange(i + 1, 12).setValue(c.fixedEnd);   // 修正後終了時間
+    sheet.getRange(i + 1, 7).setValue(isWorking);    // 稼働フラグ
+    sheet.getRange(i + 1, 8).setValue('修正済み');   // 確認ステータス
+    sheet.getRange(i + 1, 9).setValue(c.fixedStart); // 修正後開始時間
+    sheet.getRange(i + 1, 10).setValue(c.fixedEnd);  // 修正後終了時間
   }
 
   SpreadsheetApp.flush();
@@ -228,8 +218,8 @@ function handleAdminConfirmMonth_(payload) {
   var totalMinutes = 0;
   ocrData.slice(1).forEach(function(row) {
     if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth) return;
-    var startStr = normalizeTime_(row[10]) || normalizeTime_(row[4]);
-    var endStr   = normalizeTime_(row[11]) || normalizeTime_(row[5]);
+    var startStr = normalizeTime_(row[8]) || normalizeTime_(row[4]);
+    var endStr   = normalizeTime_(row[9]) || normalizeTime_(row[5]);
     if (!startStr) return;
     workingDays++;
     var s = timeToMinutes_(startStr);

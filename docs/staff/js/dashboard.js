@@ -158,16 +158,6 @@ function openOcrScreen(lineUserId, driverName) {
     } else {
       fileLinkEl.classList.add('hidden');
     }
-    document.getElementById('ocr-note-badge').classList.toggle('hidden', !res.hasNote);
-
-    var mismatch = (res.mismatchDays || []).length;
-    var banner   = document.getElementById('mismatch-banner');
-    if (mismatch > 0) {
-      document.getElementById('mismatch-count').textContent = mismatch;
-      banner.classList.remove('hidden');
-    } else {
-      banner.classList.add('hidden');
-    }
 
     renderOcrTable(res.days, res.driver);
     renderExpenses(res.expenses || []);
@@ -187,20 +177,14 @@ function renderOcrTable(days, driver) {
     var dotClass      = isWorking ? 'yes' : 'no';
     var startModified = d.fixedStart ? ' modified' : '';
     var endModified   = d.fixedEnd   ? ' modified' : '';
-    var isMismatch    = d.match === '不一致';
-    var rowClass      = isMismatch ? ' class="mismatch-row"' : '';
-    var matchCell     = isMismatch
-      ? '<span class="mismatch-badge">不一致</span>'
-      : escHtml(d.match || '');
     return [
-      '<tr' + rowClass + '>',
+      '<tr>',
       '<td style="font-weight:600;color:var(--text-sub)">' + d.day + '</td>',
       '<td><input type="text" class="time-input' + startModified + '" data-day="' + d.day + '" data-field="start"' +
           ' value="' + displayStart + '" placeholder="--:--"></td>',
       '<td><input type="text" class="time-input' + endModified   + '" data-day="' + d.day + '" data-field="end"' +
           ' value="' + displayEnd + '" placeholder="--:--"></td>',
       '<td><span class="working-dot ' + dotClass + '"></span></td>',
-      '<td>' + matchCell + '</td>',
       '</tr>',
     ].join('');
   }).join('');

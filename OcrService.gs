@@ -6,14 +6,13 @@ var CLAUDE_MODEL   = 'claude-sonnet-4-6';
 
 var OCR_PROMPT_DAYS = [
   'これはドライバーの月次稼働報告書の画像です。',
-  '日付ごとに「開始時間」「終了時間」と「稼働」マスの塗りつぶし有無を読み取り、',
+  '日付ごとに「開始時間」「終了時間」を読み取り、',
   '次のJSON形式のみで返してください。',
   '',
-  '{"days":[{"day":1,"start":"08:00","end":"17:30","worked":true}, ...]}',
+  '{"days":[{"day":1,"start":"08:00","end":"17:30"}, ...]}',
   '',
   '- day: 帳票の日付の数字（1〜31の整数）',
   '- start/end: HH:MM。記入なしはnull',
-  '- worked: 「稼働」列のマスが塗られていればtrue、なければfalse、判別不能はnull',
   '- 合計行・集計欄・立替欄・備考欄は読まない',
   '- JSONブロックのみを返し説明文は不要',
 ].join('\n');
@@ -75,7 +74,7 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
       noteText = metaResult.noteText;
     }
 
-    writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days, hasNote);
+    writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days);
     if (expenses.length > 0) {
       saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses);
     }
@@ -177,7 +176,7 @@ function countWorkingDays_(days) {
 
 // ===== Sheets書き込み =====
 
-function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, hasNote) {
+function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_OCR);
 
@@ -191,20 +190,8 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, hasNo
 
   if (days.length === 0) return;
 
-  var noteVal = !!hasNote;
   var rows = days.map(function(d) {
     var hasStartTime = d.start !== null && d.start !== undefined && d.start !== '';
-    var worked = d.worked; // true / false / null
-    var match;
-    if (worked === null || worked === undefined) {
-      match = '—';
-    } else if (worked === hasStartTime) {
-      match = '一致';
-    } else {
-      match = '不一致';
-    }
-    var workedVal = (worked === null || worked === undefined) ? '' : worked;
-
     return [
       lineUserId,        // [0]  LINEユーザーID
       driverName,        // [1]  ドライバー名
@@ -213,14 +200,10 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, hasNo
       d.start || '',     // [4]  開始時間
       d.end   || '',     // [5]  終了時間
       hasStartTime,      // [6]  稼働フラグ
-      false,             // [7]  立替経費フラグ（列維持・未使用）
-      noteVal,           // [8]  備考フラグ
-      '未確認',           // [9]  確認ステータス
-      '',                // [10] 修正後開始時間
-      '',                // [11] 修正後終了時間
-      fileId,            // [12] 受信ファイルID
-      workedVal,         // [13] 稼働マーク(OCR)
-      match,             // [14] 突合
+      '未確認',           // [7]  確認ステータス
+      '',                // [8]  修正後開始時間
+      '',                // [9]  修正後終了時間
+      fileId,            // [10] 受信ファイルID
     ];
   });
 
