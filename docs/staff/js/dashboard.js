@@ -426,11 +426,17 @@ function downloadCsv() {
       '"' + (r.confirmedAt   || '') + '"',
     ].join(','));
   });
+  var now     = new Date();
+  var dateSfx = now.getFullYear() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') + '_' +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0');
   var blob = new Blob(['﻿' + csv.join('\n')], { type: 'text/csv;charset=utf-8' });
   var url  = URL.createObjectURL(blob);
   var a    = document.createElement('a');
   a.href     = url;
-  a.download = '月報集計_' + state.yearMonth + '.csv';
+  a.download = '月報集計_' + state.yearMonth + '_' + dateSfx + '.csv';
   a.click();
   URL.revokeObjectURL(url);
 }

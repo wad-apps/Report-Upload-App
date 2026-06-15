@@ -132,11 +132,11 @@ function handleAdminGetDriverList_(payload) {
   monthlyData.slice(1).forEach(function(row) {
     if (normalizeYearMonth_(row[3]) === yearMonth) {
       var site = row[2] || '';
-      confirmedMap[row[0] + '|' + site] = { billingAmount: row[8] };
+      confirmedMap[row[0] + '|' + site] = { billingAmount: sheetValueToNumber_(row[8]) };
     }
   });
 
-  // 月報ファイルの親フォルダURLをfileIdから直接取得（フォルダ名依存を避ける）
+  // 月報ファイルの親フォルダURLをfileIdから取得（CacheService 1時間キャッシュ）
   var folderUrlByKey = {};
   Object.keys(submissionMap).forEach(function(key) {
     var sub    = submissionMap[key];
@@ -146,15 +146,7 @@ function handleAdminGetDriverList_(payload) {
       var m = sub.fileUrl.match(/\/file\/d\/([^\/]+)/);
       if (m) fileId = m[1];
     }
-    if (!fileId) return;
-    try {
-      var parents = DriveApp.getFileById(fileId).getParents();
-      if (parents.hasNext()) {
-        folderUrlByKey[key] = 'https://drive.google.com/drive/folders/' + parents.next().getId();
-      }
-    } catch (e) {
-      Logger.log('folderUrl lookup error key=' + key + ' fileId=' + fileId + ': ' + e.message);
-    }
+    folderUrlByKey[key] = getFolderUrlFromFileId_(fileId);
   });
 
   var list = Object.keys(submissionMap).map(function(key) {
@@ -257,17 +249,7 @@ function handleAdminGetOcrDetail_(payload) {
     var fm = fileUrl.match(/\/file\/d\/([^\/]+)/);
     if (fm) fileId = fm[1];
   }
-  var folderUrl = '';
-  if (fileId) {
-    try {
-      var parents = DriveApp.getFileById(fileId).getParents();
-      if (parents.hasNext()) {
-        folderUrl = 'https://drive.google.com/drive/folders/' + parents.next().getId();
-      }
-    } catch (e) {
-      Logger.log('folderUrl lookup error fileId=' + fileId + ': ' + e.message);
-    }
-  }
+  var folderUrl = getFolderUrlFromFileId_(fileId);
 
   return jsonResponse({
     days:        days,
@@ -312,11 +294,13 @@ function handleAdminSaveCorrection_(payload, email) {
     var isWorking     = c.fixedStart !== '';
     var newFixedStart = c.fixedStart !== ocrStart ? c.fixedStart : '';
     var newFixedEnd   = c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '';
+    var hasChange     = (newFixedStart !== '' || newFixedEnd !== '');
     sheet.getRange(i + 1, 8).setValue(isWorking);
-    sheet.getRange(i + 1, 9).setValue('修正済み');
+    // '修正済み' は実際に変更した行にのみ付与（全行に付かないように）
+    if (hasChange) sheet.getRange(i + 1, 9).setValue('修正済み');
     sheet.getRange(i + 1, 10).setValue(newFixedStart);
     sheet.getRange(i + 1, 11).setValue(newFixedEnd);
-    if (c.fixedStart !== ocrStart || c.fixedEnd !== ocrEnd) changeCount++;
+    if (hasChange) changeCount++;
   }
 
   SpreadsheetApp.flush();
@@ -401,10 +385,10 @@ function handleAdminExportData_(payload) {
         driverName:    row[1],
         site:          row[2] || '',
         yearMonth:     row[3],
-        workingDays:   row[4],
-        totalHours:    row[5] ? Math.round(row[5] / 60 * 10) / 10 : 0,
-        unitPrice:     row[7],
-        billingAmount: row[8],
+        workingDays:   sheetValueToNumber_(row[4]),
+        totalHours:    row[5] ? Math.round(sheetValueToNumber_(row[5]) / 60 * 10) / 10 : 0,
+        unitPrice:     sheetValueToNumber_(row[7]),
+        billingAmount: sheetValueToNumber_(row[8]),
         confirmedAt:   row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : '',
       };
     });
@@ -476,4 +460,35 @@ function timeToMinutes_(timeStr) {
   var m = parseInt(parts[1], 10);
   if (isNaN(h) || isNaN(m)) return null;
   return h * 60 + m;
+}
+
+// Sheets が数値セルを Date 型で返すことがある（シリアル番号 → 日付自動変換）ため数値に戻す
+// Sheets エポック: 1899-12-30
+function sheetValueToNumber_(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return val;
+  if (val instanceof Date) {
+    return Math.round((val.getTime() - new Date(1899, 11, 30).getTime()) / 86400000);
+  }
+  return Number(val) || 0;
+}
+
+// Drive ファイルの親フォルダ URL を取得（1時間キャッシュ）
+function getFolderUrlFromFileId_(fileId) {
+  if (!fileId) return '';
+  var cache    = CacheService.getScriptCache();
+  var cacheKey = 'fld_' + String(fileId).substring(0, 40);
+  var cached   = cache.get(cacheKey);
+  if (cached !== null) return cached;
+  var url = '';
+  try {
+    var parents = DriveApp.getFileById(fileId).getParents();
+    if (parents.hasNext()) {
+      url = 'https://drive.google.com/drive/folders/' + parents.next().getId();
+    }
+  } catch (e) {
+    Logger.log('getFolderUrlFromFileId_ error: ' + e.message);
+  }
+  cache.put(cacheKey, url, 3600);
+  return url;
 }
