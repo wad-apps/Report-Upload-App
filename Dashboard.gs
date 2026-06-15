@@ -211,11 +211,13 @@ function handleAdminSaveCorrection_(payload) {
     if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth) continue;
     var c = corrMap[row[3]];
     if (!c) continue;
+    var ocrStart  = normalizeTime_(row[4]);
+    var ocrEnd    = normalizeTime_(row[5]);
     var isWorking = c.fixedStart !== '';
-    sheet.getRange(i + 1, 7).setValue(isWorking);    // 稼働フラグ
-    sheet.getRange(i + 1, 8).setValue('修正済み');   // 確認ステータス
-    sheet.getRange(i + 1, 9).setValue(c.fixedStart); // 修正後開始時間
-    sheet.getRange(i + 1, 10).setValue(c.fixedEnd);  // 修正後終了時間
+    sheet.getRange(i + 1, 7).setValue(isWorking);
+    sheet.getRange(i + 1, 8).setValue('修正済み');
+    sheet.getRange(i + 1, 9).setValue(c.fixedStart !== ocrStart ? c.fixedStart : '');
+    sheet.getRange(i + 1, 10).setValue(c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '');
   }
 
   SpreadsheetApp.flush();

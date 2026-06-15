@@ -8,6 +8,7 @@ var state = {
   lineUserId:       null,
   displayName:      null,
   driver:           null,
+  reports:          [],
   selectedFile:     null,
   selectedMimeType: null,
   attachmentFiles:  [],
@@ -39,9 +40,10 @@ function initApp() {
       return gasPost({ action: 'bootstrap', lineUserId: profile.userId });
     })
     .then(function(res) {
-      state.driver = res.driver;
+      state.driver  = res.driver;
+      state.reports = res.reports || [];
       updateDriverInfo(res.driver);
-      renderReportList(res.reports || []);
+      renderReportList(state.reports);
       setupEventListeners();
       showScreen('main');
     })
@@ -270,6 +272,12 @@ function handleSubmit() {
   if (!yearMonth)          { showToast('対象年月を選択してください'); return; }
   if (!state.selectedFile) { showToast('ファイルを選択してください'); return; }
   if (!state.lineUserId)   { showToast('ログインし直してください'); return; }
+
+  var alreadySubmitted = state.reports.some(function(r) { return r.yearMonth === yearMonth; });
+  if (alreadySubmitted) {
+    var ym = yearMonth.replace('-', '年') + '月';
+    if (!confirm(ym + '分の月報はすでに提出済みです。上書きして再提出しますか？')) return;
+  }
 
   var uploadId = Math.random().toString(36).substr(2, 6).toUpperCase();
 

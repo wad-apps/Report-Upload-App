@@ -179,8 +179,8 @@ function renderOcrTable(days, driver) {
     var displayEnd    = d.fixedEnd   || d.end   || '';
     var isWorking     = displayStart !== '';
     var dotClass      = isWorking ? 'yes' : 'no';
-    var startModified = d.fixedStart ? ' modified' : '';
-    var endModified   = d.fixedEnd   ? ' modified' : '';
+    var startModified = (d.fixedStart && d.fixedStart !== d.start) ? ' modified' : '';
+    var endModified   = (d.fixedEnd   && d.fixedEnd   !== d.end)   ? ' modified' : '';
     return [
       '<tr>',
       '<td style="font-weight:600;color:var(--text-sub)">' + d.day + '</td>',

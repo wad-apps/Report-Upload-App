@@ -183,7 +183,7 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days) {
   // 同じ lineUserId + yearMonth の既存行を削除
   var data = sheet.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === lineUserId && data[i][2] === yearMonth) {
+    if (data[i][0] === lineUserId && normalizeYearMonth_(data[i][2]) === yearMonth) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -218,7 +218,7 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses) {
   // 同じ lineUserId + yearMonth の既存立替行を削除
   var data = sheet.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === lineUserId && data[i][2] === yearMonth) {
+    if (data[i][0] === lineUserId && normalizeYearMonth_(data[i][2]) === yearMonth) {
       sheet.deleteRow(i + 1);
     }
   }
