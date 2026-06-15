@@ -3,6 +3,17 @@
 function setupSheets() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
 
+  // 立替明細の「確認ステータス」列を物理削除（廃止列）
+  var expSheetPre = ss.getSheetByName(SHEET_EXPENSE);
+  if (expSheetPre && expSheetPre.getLastColumn() > 0) {
+    var expHeaders = expSheetPre.getRange(1, 1, 1, expSheetPre.getLastColumn()).getValues()[0];
+    var statusColIdx = expHeaders.indexOf('確認ステータス');
+    if (statusColIdx !== -1) {
+      expSheetPre.deleteColumn(statusColIdx + 1);
+      Logger.log('確認ステータス列を削除しました（列' + (statusColIdx + 1) + '）');
+    }
+  }
+
   var schemas = [
     {
       name: SHEET_RECEIVED,
@@ -22,7 +33,7 @@ function setupSheets() {
     },
     {
       name: SHEET_EXPENSE,
-      headers: ['LINEユーザーID', 'ドライバー名', '年月', '行番号', '区分', '金額', '内容', '確認ステータス', '受信ファイルID', 'アップロードID']
+      headers: ['LINEユーザーID', 'ドライバー名', '年月', '行番号', '区分', '金額', '内容', '受信ファイルID', 'アップロードID']
     },
     {
       name: SHEET_ATTACHMENT,
@@ -80,9 +91,9 @@ function backfillUploadIds() {
   if (expSheet) {
     var expData = expSheet.getDataRange().getValues();
     for (var j = 1; j < expData.length; j++) {
-      if (expData[j][9]) continue;
+      if (expData[j][8]) continue;
       var expUid = uidMap[expData[j][0] + '|' + normalizeYearMonth_(expData[j][2])];
-      if (expUid) { expSheet.getRange(j + 1, 10).setValue(expUid); updated.expense++; }
+      if (expUid) { expSheet.getRange(j + 1, 9).setValue(expUid); updated.expense++; }
     }
   }
 

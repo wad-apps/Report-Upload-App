@@ -233,9 +233,8 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, u
       exp.category || '',   // [4] 区分
       exp.amount   !== null && exp.amount !== undefined ? exp.amount : '', // [5] 金額
       exp.note     || '',   // [6] 内容
-      '',                   // [7] 確認ステータス（廃止・列は維持）
-      fileId,               // [8] 受信ファイルID
-      uploadId || '',       // [9] アップロードID
+      fileId,               // [7] 受信ファイルID
+      uploadId || '',       // [8] アップロードID
     ];
   });
 
