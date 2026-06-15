@@ -8,6 +8,7 @@ var SHEET_DRIVER   = 'ドライバーマスタ';
 var SHEET_MONTHLY  = '月次確定';
 var SHEET_EXPENSE     = '立替明細';
 var SHEET_ATTACHMENT  = '添付ファイル';
+var SHEET_LOG         = '操作ログ';
 
 // ===== ルーティング =====
 

@@ -1,8 +1,9 @@
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbxhBY8vJ74CzghhEfnZi1QitH1U0qeOFfQ-aEG8Z9bfIchXqHLDBF3BEmFEKdSma3dJTw/exec';
+var GAS_URL        = 'https://script.google.com/macros/s/AKfycbxhBY8vJ74CzghhEfnZi1QitH1U0qeOFfQ-aEG8Z9bfIchXqHLDBF3BEmFEKdSma3dJTw/exec';
+var OAUTH_CLIENT_ID = '882266271532-67lvpq4lk25qgr9npdt4f1n0o07afuq1.apps.googleusercontent.com';
 
 // ===== 状態 =====
 var state = {
-  token:          null,
+  idToken:        null,
   yearMonth:      null,
   selectedDriver: null,
   exportData:     null,
@@ -15,26 +16,27 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('input-yearmonth').value = ym;
   state.yearMonth = ym;
 
-  var savedToken = sessionStorage.getItem('adminToken');
+  initGis();
+
+  var savedToken = sessionStorage.getItem('idToken');
   if (savedToken) {
-    state.token = savedToken;
+    state.idToken = savedToken;
     showScreen('main');
     loadDashboard();
+  } else {
+    google.accounts.id.prompt();
   }
 
   setupEvents();
 });
 
 function setupEvents() {
-  document.getElementById('btn-login').addEventListener('click', handleLogin);
-  document.getElementById('input-token').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleLogin();
-  });
-
   document.getElementById('btn-logout').addEventListener('click', function() {
-    sessionStorage.removeItem('adminToken');
-    state.token = null;
+    sessionStorage.removeItem('idToken');
+    state.idToken = null;
+    google.accounts.id.disableAutoSelect();
     showScreen('login');
+    google.accounts.id.prompt();
   });
 
   document.getElementById('input-yearmonth').addEventListener('change', function(e) {
@@ -58,16 +60,25 @@ function setupEvents() {
   document.getElementById('btn-download-csv').addEventListener('click', downloadCsv);
 }
 
-// ===== ログイン =====
-function handleLogin() {
-  var token = document.getElementById('input-token').value.trim();
-  if (!token) return;
+// ===== Googleサインイン =====
+function initGis() {
+  google.accounts.id.initialize({
+    client_id:   OAUTH_CLIENT_ID,
+    callback:    handleCredentialResponse,
+    auto_select: true,
+  });
+  google.accounts.id.renderButton(
+    document.getElementById('g-signin-btn'),
+    { theme: 'outline', size: 'large', locale: 'ja', text: 'signin_with' }
+  );
+}
 
-  // トークン確認のためにoverview APIを叩く
-  adminPost({ action: 'adminGetOverview', adminToken: token, yearMonth: state.yearMonth })
+function handleCredentialResponse(response) {
+  var idToken = response.credential;
+  adminPost({ action: 'adminGetOverview', idToken: idToken, yearMonth: state.yearMonth })
     .then(function() {
-      state.token = token;
-      sessionStorage.setItem('adminToken', token);
+      state.idToken = idToken;
+      sessionStorage.setItem('idToken', idToken);
       document.getElementById('login-error').classList.add('hidden');
       showScreen('main');
       loadDashboard();
@@ -84,7 +95,7 @@ function loadDashboard() {
   document.getElementById('driver-tbody').innerHTML =
     '<tr><td colspan="7" class="empty-cell">読み込み中...</td></tr>';
 
-  adminPost({ action: 'adminGetOverview', adminToken: state.token, yearMonth: ym })
+  adminPost({ action: 'adminGetOverview', idToken: state.idToken, yearMonth: ym })
     .then(function(res) {
       document.getElementById('stat-total').textContent     = res.stats.total;
       document.getElementById('stat-pending').textContent   = res.stats.pending;
@@ -92,7 +103,7 @@ function loadDashboard() {
       document.getElementById('stat-error').textContent     = res.stats.ocrError;
     });
 
-  adminPost({ action: 'adminGetDriverList', adminToken: state.token, yearMonth: ym })
+  adminPost({ action: 'adminGetDriverList', idToken: state.idToken, yearMonth: ym })
     .then(function(res) { renderDriverTable(res.drivers); });
 }
 
@@ -316,7 +327,7 @@ function handleConfirmMonth() {
 
   adminPost({
     action:     'adminConfirmMonth',
-    adminToken: state.token,
+    idToken: state.idToken,
     lineUserId: state.selectedDriver.lineUserId,
     yearMonth:  state.yearMonth,
     site:       state.selectedDriver.site || '',
@@ -331,7 +342,7 @@ function handleConfirmMonth() {
 function handleExport() {
   adminPost({
     action:     'adminExportData',
-    adminToken: state.token,
+    idToken: state.idToken,
     yearMonth:  state.yearMonth,
   }).then(function(res) {
     state.exportData = res.rows;
@@ -402,7 +413,13 @@ function adminPost(payload) {
   })
   .then(function(res) { return res.json(); })
   .then(function(json) {
-    if (json.error === 'unauthorized') throw new Error('unauthorized');
+    if (json.error === 'unauthorized') {
+      sessionStorage.removeItem('idToken');
+      state.idToken = null;
+      showScreen('login');
+      google.accounts.id.prompt();
+      throw new Error('unauthorized');
+    }
     if (json.error) throw new Error(json.error);
     return json;
   });

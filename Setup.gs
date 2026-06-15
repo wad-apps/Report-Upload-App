@@ -43,6 +43,11 @@ function setupSheets() {
       name: SHEET_ATTACHMENT,
       // [0]timestamp [1]uid [2]name [3]site [4]yearMonth [5]index [6]fileName [7]fileId [8]fileUrl [9]uploadId
       headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '現場名', '年月', 'インデックス', 'ファイル名', 'DriveファイルID', 'DriveURL', 'アップロードID']
+    },
+    {
+      name: SHEET_LOG,
+      // [0]timestamp [1]email [2]action [3]uid [4]name [5]yearMonth [6]before [7]after [8]note
+      headers: ['日時', '操作者メール', '操作種別', 'LINEユーザーID', 'ドライバー名', '年月', '変更前', '変更後', '補足']
     }
   ];
 

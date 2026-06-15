@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
   <title>月報管理ダッシュボード</title>
-  <link rel="stylesheet" href="css/dashboard.css?v=20260615c">
+  <link rel="stylesheet" href="css/dashboard.css?v=20260615e">
 </head>
 <body>
 
@@ -12,10 +13,9 @@
   <div id="screen-login" class="screen active">
     <div class="login-box">
       <h1>月報管理</h1>
-      <p class="login-sub">管理トークンを入力してください</p>
-      <input type="password" id="input-token" class="input-token" placeholder="管理トークン">
-      <button class="btn btn-primary btn-full" id="btn-login">ログイン</button>
-      <p id="login-error" class="error-msg hidden">トークンが正しくありません</p>
+      <p class="login-sub">Googleアカウントでサインイン</p>
+      <div id="g-signin-btn" style="display:flex;justify-content:center;margin:24px 0"></div>
+      <p id="login-error" class="error-msg hidden">アクセス権限がありません</p>
     </div>
   </div>
 
@@ -192,6 +192,7 @@
   <!-- トースト -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/dashboard.js"></script>
+  <script src="https://accounts.google.com/gsi/client" defer></script>
+  <script src="js/dashboard.js?v=20260615e" defer></script>
 </body>
 </html>

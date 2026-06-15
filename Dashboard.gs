@@ -1,21 +1,41 @@
 // 事務員向け管理API
-// Script Properties に ADMIN_TOKEN を設定しておくこと
+// Script Properties に OAUTH_CLIENT_ID・ALLOWED_EMAILS を設定しておくこと
 
-function validateAdminToken_(token) {
-  var stored = PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN');
-  return stored && token === stored;
+function verifyIdToken_(idToken) {
+  if (!idToken) return null;
+  var clientId = PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_ID');
+  if (!clientId) throw new Error('OAUTH_CLIENT_ID not set in Script Properties');
+  try {
+    var res  = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
+      { muteHttpExceptions: true }
+    );
+    var data = JSON.parse(res.getContentText());
+    if (data.error)                                    return null;
+    if (data.aud !== clientId)                         return null;
+    if (!data.email_verified)                          return null;
+    if (Number(data.exp) < Date.now() / 1000)          return null;
+    return data.email.toLowerCase();
+  } catch (e) {
+    Logger.log('verifyIdToken_ error: ' + e.message);
+    return null;
+  }
 }
 
 function handleAdminPost(payload) {
-  if (!validateAdminToken_(payload.adminToken)) {
-    return jsonResponse({ error: 'unauthorized' });
-  }
+  var email = verifyIdToken_(payload.idToken);
+  if (!email) return jsonResponse({ error: 'unauthorized' });
+
+  var allowed = (PropertiesService.getScriptProperties().getProperty('ALLOWED_EMAILS') || '')
+    .toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  if (allowed.indexOf(email) === -1) return jsonResponse({ error: 'unauthorized' });
+
   switch (payload.action) {
     case 'adminGetOverview':    return handleAdminGetOverview_(payload);
     case 'adminGetDriverList':  return handleAdminGetDriverList_(payload);
     case 'adminGetOcrDetail':   return handleAdminGetOcrDetail_(payload);
-    case 'adminSaveCorrection': return handleAdminSaveCorrection_(payload);
-    case 'adminConfirmMonth':   return handleAdminConfirmMonth_(payload);
+    case 'adminSaveCorrection': return handleAdminSaveCorrection_(payload, email);
+    case 'adminConfirmMonth':   return handleAdminConfirmMonth_(payload, email);
     case 'adminExportData':     return handleAdminExportData_(payload);
     default: return jsonResponse({ error: 'invalid admin action' });
   }
@@ -213,7 +233,7 @@ function handleAdminGetOcrDetail_(payload) {
 
 // ===== OCR修正保存 =====
 
-function handleAdminSaveCorrection_(payload) {
+function handleAdminSaveCorrection_(payload, email) {
   var lineUserId  = payload.lineUserId;
   var yearMonth   = payload.yearMonth;
   var site        = payload.site || '';
@@ -242,12 +262,13 @@ function handleAdminSaveCorrection_(payload) {
   }
 
   SpreadsheetApp.flush();
+  appendAuditLog_(email, '修正', lineUserId, '', yearMonth, '', corrections.length + '件', '');
   return jsonResponse({ status: 'ok' });
 }
 
 // ===== 月次確定 =====
 
-function handleAdminConfirmMonth_(payload) {
+function handleAdminConfirmMonth_(payload, email) {
   var lineUserId = payload.lineUserId;
   var yearMonth  = payload.yearMonth;
   var site       = payload.site || '';
@@ -301,6 +322,7 @@ function handleAdminConfirmMonth_(payload) {
     }
   }
 
+  appendAuditLog_(email, '確定', lineUserId, driver.name, yearMonth, '', '稼働' + workingDays + '日/¥' + billingAmount, '');
   return jsonResponse({ status: 'ok', workingDays: workingDays, billingAmount: billingAmount });
 }
 
@@ -329,6 +351,18 @@ function handleAdminExportData_(payload) {
 
   rows.sort(function(a, b) { return a.driverName.localeCompare(b.driverName, 'ja'); });
   return jsonResponse({ rows: rows, yearMonth: yearMonth });
+}
+
+// ===== 操作ログ =====
+
+function appendAuditLog_(email, action, lineUserId, driverName, yearMonth, before, after, note) {
+  try {
+    var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_LOG);
+    if (!sheet) return;
+    sheet.appendRow([new Date(), email, action, lineUserId, driverName, yearMonth, before || '', after || '', note || '']);
+  } catch (e) {
+    Logger.log('appendAuditLog_ error: ' + e.message);
+  }
 }
 
 // 対象年月のドライバーフォルダURL一覧を { driverName: url } で返す
