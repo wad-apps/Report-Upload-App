@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
   state.yearMonth = ym;
 
   var savedToken = sessionStorage.getItem('idToken');
-  initGis(!savedToken); // savedTokenがある場合はauto_selectを無効にして競合を防ぐ
+  initGis();
 
   if (savedToken) {
     state.idToken = savedToken;
@@ -61,11 +61,13 @@ function setupEvents() {
 }
 
 // ===== Googleサインイン =====
-function initGis(autoSelect) {
+var _authInProgress = false;
+
+function initGis() {
   google.accounts.id.initialize({
     client_id:   OAUTH_CLIENT_ID,
     callback:    handleCredentialResponse,
-    auto_select: !!autoSelect,
+    auto_select: false, // savedToken競合を避けるため常に無効
   });
   google.accounts.id.renderButton(
     document.getElementById('g-signin-btn'),
@@ -74,17 +76,27 @@ function initGis(autoSelect) {
 }
 
 function handleCredentialResponse(response) {
-  var idToken = response.credential;
+  if (_authInProgress) return;
+  _authInProgress = true;
+
+  var idToken   = response.credential;
+  var loadingEl = document.getElementById('login-loading');
+  var errorEl   = document.getElementById('login-error');
+  if (loadingEl) loadingEl.classList.remove('hidden');
+  errorEl.classList.add('hidden');
+
   adminPost({ action: 'adminGetOverview', idToken: idToken, yearMonth: state.yearMonth })
     .then(function() {
       state.idToken = idToken;
       sessionStorage.setItem('idToken', idToken);
-      document.getElementById('login-error').classList.add('hidden');
+      _authInProgress = false;
       showScreen('main');
       loadDashboard();
     })
     .catch(function() {
-      document.getElementById('login-error').classList.remove('hidden');
+      _authInProgress = false;
+      if (loadingEl) loadingEl.classList.add('hidden');
+      errorEl.classList.remove('hidden');
     });
 }
 

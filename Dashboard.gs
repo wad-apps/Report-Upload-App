@@ -3,6 +3,14 @@
 
 function verifyIdToken_(idToken) {
   if (!idToken) return null;
+
+  // 同一トークンの重複tokeninfo呼び出しを避けるため5分キャッシュ
+  var cache    = CacheService.getScriptCache();
+  var keyBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, idToken);
+  var cacheKey = 'v_' + keyBytes.map(function(b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('').substring(0, 40);
+  var cached   = cache.get(cacheKey);
+  if (cached) return cached;
+
   var clientId = PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_ID');
   if (!clientId) throw new Error('OAUTH_CLIENT_ID not set in Script Properties');
   try {
@@ -15,7 +23,9 @@ function verifyIdToken_(idToken) {
     if (data.aud !== clientId)                         return null;
     if (!data.email_verified)                          return null;
     if (Number(data.exp) < Date.now() / 1000)          return null;
-    return data.email.toLowerCase();
+    var email = data.email.toLowerCase();
+    cache.put(cacheKey, email, 300);
+    return email;
   } catch (e) {
     Logger.log('verifyIdToken_ error: ' + e.message);
     return null;
