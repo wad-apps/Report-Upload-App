@@ -13,6 +13,8 @@ var state = {
   selectedFile:     null,
   selectedMimeType: null,
   attachmentFiles:  [],
+  splitResult:      null, // ファイル選択時にバックグラウンドで前処理した分割結果
+  splitResultFor:   null, // splitResult が対応するファイルオブジェクト
 };
 
 // ===== 初期化 =====
@@ -97,8 +99,11 @@ function uploadReport(yearMonth, file, uploadId) {
     });
   }
 
-  // 画像: 向きに応じて分割してから送信（縦長→上下、横長→左右）
-  return splitForOcr(file).then(function(halves) {
+  // 画像: ファイル選択時にバックグラウンド処理済みであればキャッシュを使用
+  var getHalves = (state.splitResult && state.splitResultFor === file)
+    ? Promise.resolve(state.splitResult)
+    : splitForOcr(file);
+  return getHalves.then(function(halves) {
     return gasPost(Object.assign({
       action:           'uploadReport',
       lineUserId:       state.lineUserId,
@@ -114,6 +119,7 @@ function uploadReport(yearMonth, file, uploadId) {
 }
 
 // 画像の向きを判定して分割し、フル + 前半 + 後半 の base64 を返す
+// Drive保存用フル画像は2000px上限、OCR用ハーフは1400px上限（API転送量削減）
 function splitForOcr(file) {
   return new Promise(function(resolve, reject) {
     var img = new Image();
@@ -121,37 +127,47 @@ function splitForOcr(file) {
     img.onload = function() {
       URL.revokeObjectURL(url);
 
-      var MAX   = 2000;
-      var scale = Math.min(1, MAX / Math.max(img.width, img.height));
-      var w     = Math.round(img.width  * scale);
-      var h     = Math.round(img.height * scale);
+      var MAX_FULL = 2000;
+      var MAX_OCR  = 1400;
+
+      var scaleFull = Math.min(1, MAX_FULL / Math.max(img.width, img.height));
+      var w     = Math.round(img.width  * scaleFull);
+      var h     = Math.round(img.height * scaleFull);
 
       var canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       var full = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
+      // OCR用: より小さいスケールで改めてリサイズ
+      var scaleOcr = Math.min(1, MAX_OCR / Math.max(img.width, img.height));
+      var wo = Math.round(img.width  * scaleOcr);
+      var ho = Math.round(img.height * scaleOcr);
+      var canvasOcr = document.createElement('canvas');
+      canvasOcr.width = wo; canvasOcr.height = ho;
+      canvasOcr.getContext('2d').drawImage(img, 0, 0, wo, ho);
+
       var c1 = document.createElement('canvas');
       var c2 = document.createElement('canvas');
 
       // 境界付近の行が欠落しないよう25%重複させて分割する
       // 前半: 0〜65%、後半: 35〜100%
-      if (w > h) {
+      if (wo > ho) {
         // 横長: 左右分割
-        var cut1 = Math.round(w * 0.65);
-        var cut2 = Math.round(w * 0.35);
-        c1.width = cut1; c1.height = h;
-        c1.getContext('2d').drawImage(canvas, 0, 0, cut1, h, 0, 0, cut1, h);
-        c2.width = w - cut2; c2.height = h;
-        c2.getContext('2d').drawImage(canvas, cut2, 0, w - cut2, h, 0, 0, w - cut2, h);
+        var cut1 = Math.round(wo * 0.65);
+        var cut2 = Math.round(wo * 0.35);
+        c1.width = cut1; c1.height = ho;
+        c1.getContext('2d').drawImage(canvasOcr, 0, 0, cut1, ho, 0, 0, cut1, ho);
+        c2.width = wo - cut2; c2.height = ho;
+        c2.getContext('2d').drawImage(canvasOcr, cut2, 0, wo - cut2, ho, 0, 0, wo - cut2, ho);
       } else {
         // 縦長: 上下分割
-        var cut1 = Math.round(h * 0.65);
-        var cut2 = Math.round(h * 0.35);
-        c1.width = w; c1.height = cut1;
-        c1.getContext('2d').drawImage(canvas, 0, 0, w, cut1, 0, 0, w, cut1);
-        c2.width = w; c2.height = h - cut2;
-        c2.getContext('2d').drawImage(canvas, 0, cut2, w, h - cut2, 0, 0, w, h - cut2);
+        var cut1 = Math.round(ho * 0.65);
+        var cut2 = Math.round(ho * 0.35);
+        c1.width = wo; c1.height = cut1;
+        c1.getContext('2d').drawImage(canvasOcr, 0, 0, wo, cut1, 0, 0, wo, cut1);
+        c2.width = wo; c2.height = ho - cut2;
+        c2.getContext('2d').drawImage(canvasOcr, 0, cut2, wo, ho - cut2, 0, 0, wo, ho - cut2);
       }
 
       resolve({
@@ -242,6 +258,8 @@ function setupEventListeners() {
 function handleFileSelected(file) {
   state.selectedFile     = file;
   state.selectedMimeType = file.type;
+  state.splitResult      = null;
+  state.splitResultFor   = null;
 
   document.getElementById('upload-area').classList.add('hidden');
   document.getElementById('preview-area').classList.remove('hidden');
@@ -251,6 +269,13 @@ function handleFileSelected(file) {
   if (file.type.startsWith('image/')) {
     img.src = URL.createObjectURL(file);
     img.classList.remove('hidden');
+    // バックグラウンドで分割処理を先行実行（送信時に待ち時間ゼロにする）
+    splitForOcr(file).then(function(halves) {
+      if (state.selectedFile === file) {
+        state.splitResult    = halves;
+        state.splitResultFor = file;
+      }
+    }).catch(function() {});
   } else {
     img.classList.add('hidden');
   }
@@ -261,6 +286,8 @@ function handleFileSelected(file) {
 function clearFileSelection() {
   state.selectedFile     = null;
   state.selectedMimeType = null;
+  state.splitResult      = null;
+  state.splitResultFor   = null;
   document.getElementById('file-input').value = '';
   document.getElementById('upload-area').classList.remove('hidden');
   document.getElementById('preview-area').classList.add('hidden');
@@ -310,8 +337,8 @@ function doSubmit(yearMonth) {
   uploadReport(yearMonth, state.selectedFile, uploadId)
     .then(function() {
       if (state.attachmentFiles.length === 0) return Promise.resolve();
-      updateOverlayText('添付ファイルをアップロード中... 1/' + state.attachmentFiles.length);
-      return uploadAttachments(yearMonth, state.attachmentFiles, 0, uploadId);
+      updateOverlayText('添付ファイルをアップロード中...');
+      return uploadAttachments(yearMonth, state.attachmentFiles, uploadId);
     })
     .then(function() {
       showOverlay(false);
@@ -337,38 +364,32 @@ function showConfirm(message, onOk) {
   };
 }
 
-function uploadAttachments(yearMonth, files, index, uploadId) {
-  if (index >= files.length) return Promise.resolve();
-  var file = files[index];
+function uploadAttachments(yearMonth, files, uploadId) {
+  var site = state.selectedDriver ? (state.selectedDriver.site || '') : '';
+  return Promise.all(files.map(function(file, index) {
+    var getBase64 = file.type === 'application/pdf'
+      ? new Promise(function(resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function(e) { resolve(e.target.result.split(',')[1]); };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        })
+      : resizeImage(file);
 
-  var getBase64 = file.type === 'application/pdf'
-    ? new Promise(function(resolve, reject) {
-        var reader = new FileReader();
-        reader.onload = function(e) { resolve(e.target.result.split(',')[1]); };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      })
-    : resizeImage(file);
-
-  return getBase64.then(function(base64) {
-    return gasPost({
-      action:     'uploadAttachment',
-      lineUserId: state.lineUserId,
-      site:       state.selectedDriver ? (state.selectedDriver.site || '') : '',
-      yearMonth:  yearMonth,
-      mimeType:   file.type.startsWith('image/') ? 'image/jpeg' : file.type,
-      fileBase64: base64,
-      fileName:   file.name,
-      index:      index,
-      uploadId:   uploadId,
+    return getBase64.then(function(base64) {
+      return gasPost({
+        action:     'uploadAttachment',
+        lineUserId: state.lineUserId,
+        site:       site,
+        yearMonth:  yearMonth,
+        mimeType:   file.type.startsWith('image/') ? 'image/jpeg' : file.type,
+        fileBase64: base64,
+        fileName:   file.name,
+        index:      index,
+        uploadId:   uploadId,
+      });
     });
-  }).then(function() {
-    var next = index + 1;
-    if (next < files.length) {
-      updateOverlayText('添付ファイルをアップロード中... ' + (next + 1) + '/' + files.length);
-    }
-    return uploadAttachments(yearMonth, files, next, uploadId);
-  });
+  }));
 }
 
 function resizeImage(file) {

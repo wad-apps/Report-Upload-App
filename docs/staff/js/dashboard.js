@@ -8,6 +8,7 @@ var state = {
   selectedDriver: null,
   exportData:     null,
 };
+var cachedListData = null; // { drivers, stats, yearMonth } — 一覧画面の戻り時に再フェッチを省略
 
 // ===== 初期化 =====
 document.addEventListener('DOMContentLoaded', function() {
@@ -44,14 +45,18 @@ function setupEvents() {
 
   document.getElementById('input-yearmonth').addEventListener('change', function(e) {
     state.yearMonth = e.target.value;
+    cachedListData = null;
     loadDashboard();
   });
 
-  document.getElementById('btn-refresh').addEventListener('click', loadDashboard);
+  document.getElementById('btn-refresh').addEventListener('click', function() {
+    cachedListData = null;
+    loadDashboard();
+  });
 
   document.getElementById('btn-back-to-list').addEventListener('click', function() {
     showScreen('main');
-    loadDashboard();
+    loadDashboard(false); // キャッシュがあれば再フェッチしない
   });
 
   document.getElementById('btn-save-correction').addEventListener('click', function() { handleSaveCorrection(false); });
@@ -105,23 +110,32 @@ function handleCredentialResponse(response) {
 }
 
 // ===== ダッシュボード読み込み =====
-function loadDashboard() {
+// force=false のとき同一年月のキャッシュがあれば再フェッチしない（一覧戻り用）
+function loadDashboard(force) {
   var ym = state.yearMonth;
+  if (force === false && cachedListData && cachedListData.yearMonth === ym) {
+    renderStats(cachedListData.stats);
+    renderDriverTable(cachedListData.drivers);
+    return;
+  }
 
   document.getElementById('driver-tbody').innerHTML =
     '<tr><td colspan="7" class="empty-cell">読み込み中...</td></tr>';
 
-  adminPost({ action: 'adminGetOverview', idToken: state.idToken, yearMonth: ym })
-    .then(function(res) {
-      document.getElementById('stat-total').textContent     = res.stats.total;
-      document.getElementById('stat-pending').textContent   = res.stats.pending;
-      document.getElementById('stat-confirmed').textContent = res.stats.confirmed;
-      document.getElementById('stat-error').textContent     = res.stats.ocrError;
-    }).catch(function() {});
-
   adminPost({ action: 'adminGetDriverList', idToken: state.idToken, yearMonth: ym })
-    .then(function(res) { renderDriverTable(res.drivers); })
-    .catch(function() {});
+    .then(function(res) {
+      cachedListData = { drivers: res.drivers, stats: res.stats, yearMonth: ym };
+      renderStats(res.stats);
+      renderDriverTable(res.drivers);
+    }).catch(function() {});
+}
+
+function renderStats(stats) {
+  if (!stats) return;
+  document.getElementById('stat-total').textContent     = stats.total;
+  document.getElementById('stat-pending').textContent   = stats.pending;
+  document.getElementById('stat-confirmed').textContent = stats.confirmed;
+  document.getElementById('stat-error').textContent     = stats.ocrError;
 }
 
 // ===== ドライバー一覧レンダリング =====
@@ -366,6 +380,7 @@ function handleConfirmMonth() {
       site:       state.selectedDriver.site || '',
     });
   }).then(function(res) {
+    cachedListData = null; // 一覧を次回強制再フェッチ
     showToast('確定しました。稼働' + res.workingDays + '日 / ¥' + res.billingAmount.toLocaleString());
     confirmBtn.textContent = '確定済み';
   }).catch(function() {

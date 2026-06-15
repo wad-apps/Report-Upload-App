@@ -137,8 +137,9 @@ function handleAdminGetDriverList_(payload) {
     }
   });
 
-  // フォルダURLはアップロード時に保存済みの値を優先し、旧データはDriveスキャンで補完
-  var folderUrlMap = getMonthDriverFolderUrls_(yearMonth);
+  // folderUrlが未保存の行がある場合のみDriveスキャン（全件保存済みならスキップ）
+  var needsDriveScan = Object.keys(submissionMap).some(function(key) { return !submissionMap[key].folderUrl; });
+  var folderUrlMap = needsDriveScan ? getMonthDriverFolderUrls_(yearMonth) : {};
 
   var list = Object.keys(submissionMap).map(function(key) {
     var sub = submissionMap[key];
@@ -163,7 +164,14 @@ function handleAdminGetDriverList_(payload) {
   });
 
   list.sort(function(a, b) { return a.driverName.localeCompare(b.driverName, 'ja'); });
-  return jsonResponse({ drivers: list, yearMonth: yearMonth });
+  var stats = { total: 0, pending: 0, confirmed: 0, ocrError: 0 };
+  list.forEach(function(d) {
+    stats.total++;
+    if      (d.status === '確認待ち')  stats.pending++;
+    else if (d.status === '確定')      stats.confirmed++;
+    else if (d.status === 'OCRエラー') stats.ocrError++;
+  });
+  return jsonResponse({ drivers: list, yearMonth: yearMonth, stats: stats });
 }
 
 // ===== OCR詳細（日別データ） =====
