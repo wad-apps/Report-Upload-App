@@ -136,24 +136,15 @@ function handleAdminGetDriverList_(payload) {
     }
   });
 
-  // 月報ファイルの親フォルダURLをfileIdから取得（CacheService 1時間キャッシュ）
-  var folderUrlByKey = {};
-  Object.keys(submissionMap).forEach(function(key) {
-    var sub    = submissionMap[key];
-    var fileId = sub.fileId;
-    // fileId 列が空の旧データは fileUrl から抽出
-    if (!fileId && sub.fileUrl) {
-      var m = sub.fileUrl.match(/\/file\/d\/([^\/]+)/);
-      if (m) fileId = m[1];
-    }
-    folderUrlByKey[key] = getFolderUrlFromFileId_(fileId);
-  });
+  // ドライバーフォルダURL一覧（フォルダ名→URL）
+  var folderUrlMap = getMonthDriverFolderUrls_(yearMonth);
 
   var list = Object.keys(submissionMap).map(function(key) {
     var sub = submissionMap[key];
     var d   = driverMap[key] || uidFallbackMap[sub.uid] || {};
     var wd  = workingDaysMap[key] || 0;
     var up  = d.unitPrice || 0;
+    var folderName = d.site ? ((d.name || '') + '_' + d.site) : (d.name || '');
     return {
       lineUserId:    sub.uid,
       driverName:    d.name || '',
@@ -166,7 +157,7 @@ function handleAdminGetDriverList_(payload) {
       workingDays:   wd,
       billingAmount: confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
       isConfirmed:   !!confirmedMap[key],
-      folderUrl:     folderUrlByKey[key] || '',
+      folderUrl:     folderUrlMap[folderName] || '',
     };
   });
 
@@ -243,13 +234,10 @@ function handleAdminGetOcrDetail_(payload) {
     attachments.sort(function(a, b) { return a.index - b.index; });
   }
 
-  var driver = getDriverByUserIdAndSite_(lineUserId, site) || {};
-  // fileId 列が空の旧データは fileUrl から抽出
-  if (!fileId && fileUrl) {
-    var fm = fileUrl.match(/\/file\/d\/([^\/]+)/);
-    if (fm) fileId = fm[1];
-  }
-  var folderUrl = getFolderUrlFromFileId_(fileId);
+  var driver       = getDriverByUserIdAndSite_(lineUserId, site) || {};
+  var folderUrlMap = getMonthDriverFolderUrls_(yearMonth);
+  var folderName   = driver.site ? (driver.name + '_' + driver.site) : (driver.name || '');
+  var folderUrl    = folderUrlMap[folderName] || '';
 
   return jsonResponse({
     days:        days,
@@ -294,13 +282,16 @@ function handleAdminSaveCorrection_(payload, email) {
     var isWorking     = c.fixedStart !== '';
     var newFixedStart = c.fixedStart !== ocrStart ? c.fixedStart : '';
     var newFixedEnd   = c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '';
-    var hasChange     = (newFixedStart !== '' || newFixedEnd !== '');
+    var currentFixedStart = normalizeTime_(row[9]);
+    var currentFixedEnd   = normalizeTime_(row[10]);
+    var isChanged     = (newFixedStart !== currentFixedStart || newFixedEnd !== currentFixedEnd);
+    var hasCorrection = (newFixedStart !== '' || newFixedEnd !== '');
     sheet.getRange(i + 1, 8).setValue(isWorking);
-    // '修正済み' は実際に変更した行にのみ付与（全行に付かないように）
-    if (hasChange) sheet.getRange(i + 1, 9).setValue('修正済み');
+    // '修正済み' は保存値が空でない行にのみ付与（全行に付かないように）
+    if (hasCorrection) sheet.getRange(i + 1, 9).setValue('修正済み');
     sheet.getRange(i + 1, 10).setValue(newFixedStart);
     sheet.getRange(i + 1, 11).setValue(newFixedEnd);
-    if (hasChange) changeCount++;
+    if (isChanged) changeCount++;
   }
 
   SpreadsheetApp.flush();
@@ -473,22 +464,3 @@ function sheetValueToNumber_(val) {
   return Number(val) || 0;
 }
 
-// Drive ファイルの親フォルダ URL を取得（1時間キャッシュ）
-function getFolderUrlFromFileId_(fileId) {
-  if (!fileId) return '';
-  var cache    = CacheService.getScriptCache();
-  var cacheKey = 'fld_' + String(fileId).substring(0, 40);
-  var cached   = cache.get(cacheKey);
-  if (cached !== null) return cached;
-  var url = '';
-  try {
-    var parents = DriveApp.getFileById(fileId).getParents();
-    if (parents.hasNext()) {
-      url = 'https://drive.google.com/drive/folders/' + parents.next().getId();
-    }
-  } catch (e) {
-    Logger.log('getFolderUrlFromFileId_ error: ' + e.message);
-  }
-  cache.put(cacheKey, url, 3600);
-  return url;
-}
