@@ -34,8 +34,8 @@ var OCR_PROMPT_META = [
 // ===== メイン関数 =====
 
 // Code.gsのhandleUploadReportから呼ばれる
-function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBase64, uploadId) {
-  var driver = getDriverByUserId(lineUserId);
+function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBase64, uploadId, site) {
+  var driver = getDriverByUserIdAndSite_(lineUserId, site || '');
   if (!driver) throw new Error('Driver not found: ' + lineUserId);
 
   updateReceivedFileStatus_(fileId, 'OCR中');
@@ -74,9 +74,9 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
       noteText = metaResult.noteText;
     }
 
-    writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days, uploadId);
+    writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days, uploadId, site || '');
     if (expenses.length > 0) {
-      saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses, uploadId);
+      saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses, uploadId, site || '');
     }
     if (noteText) {
       updateReceivedNoteText_(fileId, noteText);
@@ -176,14 +176,16 @@ function countWorkingDays_(days) {
 
 // ===== Sheets書き込み =====
 
-function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploadId) {
+function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploadId, site) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_OCR);
 
-  // 同じ lineUserId + yearMonth の既存行を削除
+  // 同じ lineUserId + yearMonth + site の既存行を削除
   var data = sheet.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === lineUserId && normalizeYearMonth_(data[i][2]) === yearMonth) {
+    if (data[i][0] === lineUserId &&
+        normalizeYearMonth_(data[i][2]) === yearMonth &&
+        (data[i][12] || '') === (site || '')) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -205,21 +207,24 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploa
       '',                // [9]  修正後終了時間
       fileId,            // [10] 受信ファイルID
       uploadId || '',    // [11] アップロードID
+      site || '',        // [12] 現場名
     ];
   });
 
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
-function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, uploadId) {
+function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, uploadId, site) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_EXPENSE);
   if (!sheet) return;
 
-  // 同じ lineUserId + yearMonth の既存立替行を削除
+  // 同じ lineUserId + yearMonth + site の既存立替行を削除
   var data = sheet.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === lineUserId && normalizeYearMonth_(data[i][2]) === yearMonth) {
+    if (data[i][0] === lineUserId &&
+        normalizeYearMonth_(data[i][2]) === yearMonth &&
+        (data[i][9] || '') === (site || '')) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -235,6 +240,7 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, u
       exp.note     || '',   // [6] 内容
       fileId,               // [7] 受信ファイルID
       uploadId || '',       // [8] アップロードID
+      site || '',           // [9] 現場名
     ];
   });
 

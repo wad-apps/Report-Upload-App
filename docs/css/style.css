@@ -352,5 +352,22 @@ body {
   gap: 10px;
 }
 
+/* ===== 現場選択 ===== */
+.btn-site {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.btn-site:active { opacity: 0.7; }
+
 /* ===== ユーティリティ ===== */
 .hidden { display: none !important; }

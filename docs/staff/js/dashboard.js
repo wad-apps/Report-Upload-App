@@ -128,6 +128,7 @@ function renderDriverTable(drivers) {
           '<button class="btn btn-sm btn-outline btn-review" ' + btnDisabled +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
           ' data-name="' + escHtml(d.driverName) + '"' +
+          ' data-site="' + escHtml(d.site || '') + '"' +
           ' data-folder="' + escHtml(d.folderUrl || '') + '">' + btnLabel + '</button></td>',
       '</tr>',
     ].join('');
@@ -138,15 +139,16 @@ function renderDriverTable(drivers) {
     btn.addEventListener('click', function() {
       btn.disabled = true;
       btn.textContent = '読み込み中...';
-      openOcrScreen(btn.dataset.uid, btn.dataset.name, btn.dataset.folder);
+      openOcrScreen(btn.dataset.uid, btn.dataset.name, btn.dataset.site || '', btn.dataset.folder);
     });
   });
 }
 
 // ===== OCR確認画面 =====
-function openOcrScreen(lineUserId, driverName, folderUrl) {
-  state.selectedDriver = { lineUserId: lineUserId, driverName: driverName };
-  document.getElementById('ocr-header-title').textContent = driverName + '　' + state.yearMonth;
+function openOcrScreen(lineUserId, driverName, site, folderUrl) {
+  state.selectedDriver = { lineUserId: lineUserId, driverName: driverName, site: site || '' };
+  var titleSite = site ? '　' + site : '';
+  document.getElementById('ocr-header-title').textContent = driverName + titleSite + '　' + state.yearMonth;
   document.getElementById('btn-confirm-month').disabled = true;
 
   var folderLinkEl = document.getElementById('ocr-folder-link');
@@ -162,6 +164,7 @@ function openOcrScreen(lineUserId, driverName, folderUrl) {
     adminToken:  state.token,
     lineUserId:  lineUserId,
     yearMonth:   state.yearMonth,
+    site:        site || '',
   }).then(function(res) {
     var fileLinkEl = document.getElementById('ocr-file-link');
     if (res.fileUrl) {
@@ -292,6 +295,7 @@ function handleSaveCorrection() {
     adminToken:  state.token,
     lineUserId:  state.selectedDriver.lineUserId,
     yearMonth:   state.yearMonth,
+    site:        state.selectedDriver.site || '',
     corrections: corrections,
   }).then(function() {
     showToast('修正を保存しました');
@@ -315,6 +319,7 @@ function handleConfirmMonth() {
     adminToken: state.token,
     lineUserId: state.selectedDriver.lineUserId,
     yearMonth:  state.yearMonth,
+    site:       state.selectedDriver.site || '',
   }).then(function(res) {
     showToast('確定しました。稼働' + res.workingDays + '日 / ¥' + res.billingAmount.toLocaleString());
     document.getElementById('btn-confirm-month').disabled = true;

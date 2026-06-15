@@ -50,13 +50,13 @@ function doPost(e) {
 
 // 起動時に1回のリクエストでプロフィール＋提出履歴を返す
 function handleBootstrap(payload) {
-  var driver = getDriverByUserId(payload.lineUserId);
-  if (!driver) return jsonResponse({ error: 'unauthorized' });
+  var drivers = getDriversByUserId_(payload.lineUserId);
+  if (!drivers.length) return jsonResponse({ error: 'unauthorized' });
 
-  var reports = getReportsByUserId_(driver.lineUserId);
+  var reports = getReportsByUserId_(drivers[0].lineUserId);
   return jsonResponse({
-    driver:  driver,
-    reports: reports
+    drivers: drivers,
+    reports: reports,
   });
 }
 
@@ -67,10 +67,11 @@ function handleGetProfile(payload) {
 }
 
 function handleUploadReport(payload) {
-  var driver = getDriverByUserId(payload.lineUserId);
+  var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
   if (!driver) return jsonResponse({ error: 'unauthorized' });
 
   var yearMonth = payload.yearMonth;
+  var site      = driver.site || '';
   var mimeType  = payload.mimeType || 'image/jpeg';
   var base64    = payload.fileBase64;
   var uploadId  = payload.uploadId || '';
@@ -84,22 +85,26 @@ function handleUploadReport(payload) {
 
   var ss = SpreadsheetApp.openById(SHEET_ID);
 
-  // 同一人・同一月の既存受信行を削除（DriveファイルごとW）
+  // 同一人・同一月・同一現場の既存受信行を削除（Driveファイルごと）
   var recvSheet = ss.getSheetByName(SHEET_RECEIVED);
   var recvData  = recvSheet.getDataRange().getValues();
   for (var i = recvData.length - 1; i >= 1; i--) {
-    if (recvData[i][1] === driver.lineUserId && normalizeYearMonth_(recvData[i][3]) === yearMonth) {
+    if (recvData[i][1] === driver.lineUserId &&
+        normalizeYearMonth_(recvData[i][3]) === yearMonth &&
+        (recvData[i][13] || '') === site) {
       trashDriveFile_(recvData[i][5]); // [5] = DriveファイルID
       recvSheet.deleteRow(i + 1);
     }
   }
 
-  // 同一人・同一月の既存添付行を削除（DriveファイルごとW）
+  // 同一人・同一月・同一現場の既存添付行を削除（Driveファイルごと）
   var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);
   if (attSheet) {
     var attData = attSheet.getDataRange().getValues();
     for (var j = attData.length - 1; j >= 1; j--) {
-      if (attData[j][1] === driver.lineUserId && normalizeYearMonth_(attData[j][3]) === yearMonth) {
+      if (attData[j][1] === driver.lineUserId &&
+          normalizeYearMonth_(attData[j][3]) === yearMonth &&
+          (attData[j][9] || '') === site) {
         trashDriveFile_(attData[j][6]); // [6] = DriveファイルID
         attSheet.deleteRow(j + 1);
       }
@@ -120,17 +125,18 @@ function handleUploadReport(payload) {
     formatConsentAt_(payload.consentAt), // [10] 同意日時
     '',                            // [11] 備考テキスト（OCR後に更新）
     uploadId,                      // [12] アップロードID
+    site,                          // [13] 現場名
   ]);
 
   // OCR実行（失敗してもアップロード自体は成功扱い）
   var ocrResult = null;
   try {
     if (fileType === 'pdf') {
-      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, null, null, base64, uploadId);
+      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, null, null, base64, uploadId, site);
     } else {
       var firstBase64  = payload.fileBase64First  || base64;
       var secondBase64 = payload.fileBase64Second || base64;
-      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, firstBase64, secondBase64, null, uploadId);
+      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, firstBase64, secondBase64, null, uploadId, site);
     }
   } catch (ocrErr) {
     Logger.log('OCR error: ' + ocrErr.message);
@@ -145,10 +151,11 @@ function handleUploadReport(payload) {
 }
 
 function handleUploadAttachment(payload) {
-  var driver = getDriverByUserId(payload.lineUserId);
+  var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
   if (!driver) return jsonResponse({ error: 'unauthorized' });
 
   var yearMonth = payload.yearMonth;
+  var site      = driver.site || '';
   var mimeType  = payload.mimeType || 'image/jpeg';
   var base64    = payload.fileBase64;
   var uploadId  = payload.uploadId || '';
@@ -172,15 +179,16 @@ function handleUploadAttachment(payload) {
     fileId,             // [6] DriveファイルID
     fileUrl,            // [7] DriveURL
     uploadId,           // [8] アップロードID
+    site,               // [9] 現場名
   ]);
 
   return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl });
 }
 
 function handleGetMyReports(payload) {
-  var driver = getDriverByUserId(payload.lineUserId);
-  if (!driver) return jsonResponse({ error: 'unauthorized' });
-  return jsonResponse({ reports: getReportsByUserId_(driver.lineUserId) });
+  var drivers = getDriversByUserId_(payload.lineUserId);
+  if (!drivers.length) return jsonResponse({ error: 'unauthorized' });
+  return jsonResponse({ reports: getReportsByUserId_(drivers[0].lineUserId) });
 }
 
 // ===== ヘルパー =====
@@ -199,9 +207,65 @@ function getDriverByUserId(userId) {
         site:            data[i][2],
         unitPrice:       data[i][3],
         baseWorkMinutes: data[i][4],
-        // breakMinutes: data[i][5], // スタブ：休憩時間（未決定）
       };
     }
+  }
+  return null;
+}
+
+// userId の全現場分を配列で返す
+function getDriversByUserId_(userId) {
+  if (!userId) return [];
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_DRIVER);
+  var data  = sheet.getDataRange().getValues();
+
+  var drivers = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === userId) {
+      drivers.push({
+        lineUserId:      data[i][0],
+        name:            data[i][1],
+        site:            data[i][2],
+        unitPrice:       data[i][3],
+        baseWorkMinutes: data[i][4],
+      });
+    }
+  }
+  return drivers;
+}
+
+// userId + site で1件取得。site が空のときは最初のマッチを返す（後方互換）
+function getDriverByUserIdAndSite_(userId, site) {
+  if (!userId) return null;
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_DRIVER);
+  var data  = sheet.getDataRange().getValues();
+
+  var firstMatch = null;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === userId) {
+      if (!firstMatch) firstMatch = data[i];
+      if ((data[i][2] || '') === (site || '')) {
+        return {
+          lineUserId:      data[i][0],
+          name:            data[i][1],
+          site:            data[i][2],
+          unitPrice:       data[i][3],
+          baseWorkMinutes: data[i][4],
+        };
+      }
+    }
+  }
+  // site 未指定のとき最初のマッチを返す（旧クライアント互換）
+  if (!site && firstMatch) {
+    return {
+      lineUserId:      firstMatch[0],
+      name:            firstMatch[1],
+      site:            firstMatch[2],
+      unitPrice:       firstMatch[3],
+      baseWorkMinutes: firstMatch[4],
+    };
   }
   return null;
 }
@@ -219,7 +283,8 @@ function getReportsByUserId_(lineUserId) {
         yearMonth: normalizeYearMonth_(data[i][3]),
         fileType:  data[i][4],
         fileUrl:   data[i][6],
-        status:    data[i][7]
+        status:    data[i][7],
+        site:      data[i][13] || '',
       });
     }
   }
@@ -235,7 +300,8 @@ function saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName) {
 
   var rootFolder   = DriveApp.getFolderById(DRIVE_FOLDER_ID);
   var monthFolder  = getOrCreateFolder_(rootFolder, yearMonth);
-  var driverFolder = getOrCreateFolder_(monthFolder, driver.name);
+  var folderName   = driver.site ? (driver.name + '_' + driver.site) : driver.name;
+  var driverFolder = getOrCreateFolder_(monthFolder, folderName);
 
   return driverFolder.createFile(blob).getId();
 }

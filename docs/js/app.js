@@ -7,7 +7,8 @@ var TAG_REDIRECT_URL = 'https://webhook.site/f549c80d-9d4d-4d22-84b2-e98310c8ab6
 var state = {
   lineUserId:       null,
   displayName:      null,
-  driver:           null,
+  drivers:          [],
+  selectedDriver:   null,
   reports:          [],
   selectedFile:     null,
   selectedMimeType: null,
@@ -40,12 +41,19 @@ function initApp() {
       return gasPost({ action: 'bootstrap', lineUserId: profile.userId });
     })
     .then(function(res) {
-      state.driver  = res.driver;
+      // drivers 配列（新形式）と driver 単体（旧形式）の両方に対応
+      var drivers = res.drivers || (res.driver ? [res.driver] : []);
+      state.drivers = drivers;
       state.reports = res.reports || [];
-      updateDriverInfo(res.driver);
       renderReportList(state.reports);
       setupEventListeners();
-      showScreen('main');
+      if (drivers.length > 1) {
+        showSiteSelection(drivers);
+      } else {
+        state.selectedDriver = drivers[0] || null;
+        updateDriverInfo(state.selectedDriver);
+        showScreen('main');
+      }
     })
     .catch(function(err) {
       if (err === 'not_logged_in') return;
@@ -67,6 +75,8 @@ function uploadReport(yearMonth, file, uploadId) {
     uploadId:     uploadId,
   };
 
+  var site = state.selectedDriver ? (state.selectedDriver.site || '') : '';
+
   if (isPdf) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
@@ -75,6 +85,7 @@ function uploadReport(yearMonth, file, uploadId) {
         gasPost(Object.assign({
           action:     'uploadReport',
           lineUserId: state.lineUserId,
+          site:       site,
           yearMonth:  yearMonth,
           mimeType:   'application/pdf',
           fileBase64: base64,
@@ -91,6 +102,7 @@ function uploadReport(yearMonth, file, uploadId) {
     return gasPost(Object.assign({
       action:           'uploadReport',
       lineUserId:       state.lineUserId,
+      site:             site,
       yearMonth:        yearMonth,
       mimeType:         'image/jpeg',
       fileBase64:       halves.full,
@@ -269,14 +281,19 @@ function updateSubmitEnabled() {
 
 function handleSubmit() {
   var yearMonth = document.getElementById('input-yearmonth').value;
-  if (!yearMonth)          { showToast('対象年月を選択してください'); return; }
-  if (!state.selectedFile) { showToast('ファイルを選択してください'); return; }
-  if (!state.lineUserId)   { showToast('ログインし直してください'); return; }
+  if (!yearMonth)                { showToast('対象年月を選択してください'); return; }
+  if (!state.selectedFile)       { showToast('ファイルを選択してください'); return; }
+  if (!state.lineUserId)         { showToast('ログインし直してください'); return; }
+  if (!state.selectedDriver)     { showToast('現場を選択してください'); return; }
 
-  var alreadySubmitted = state.reports.some(function(r) { return r.yearMonth === yearMonth; });
+  var site = state.selectedDriver.site || '';
+  var alreadySubmitted = state.reports.some(function(r) {
+    return r.yearMonth === yearMonth && (r.site || '') === site;
+  });
   if (alreadySubmitted) {
-    var ym = yearMonth.replace('-', '年') + '月';
-    showConfirm(ym + '分の月報はすでに提出済みです。上書きして再提出しますか？', function() {
+    var ym        = yearMonth.replace('-', '年') + '月';
+    var siteLabel = site ? '（' + site + '）' : '';
+    showConfirm(ym + '分' + siteLabel + 'の月報はすでに提出済みです。上書きして再提出しますか？', function() {
       doSubmit(yearMonth);
     });
     return;
@@ -337,6 +354,7 @@ function uploadAttachments(yearMonth, files, index, uploadId) {
     return gasPost({
       action:     'uploadAttachment',
       lineUserId: state.lineUserId,
+      site:       state.selectedDriver ? (state.selectedDriver.site || '') : '',
       yearMonth:  yearMonth,
       mimeType:   file.type.startsWith('image/') ? 'image/jpeg' : file.type,
       fileBase64: base64,
@@ -427,10 +445,11 @@ function renderReportList(reports) {
       var d = new Date(r.timestamp);
       submitDate = (d.getMonth() + 1) + '/' + d.getDate() + ' 提出 · ';
     }
+    var siteLabel = r.site ? '　' + r.site : '';
     return [
       '<div class="report-item">',
       '  <div class="report-item-left">',
-      '    <div class="yearmonth">' + ymLabel + '</div>',
+      '    <div class="yearmonth">' + ymLabel + escHtml(siteLabel) + '</div>',
       '    <div class="filetype">' + submitDate + fileLabel + '</div>',
       '  </div>',
       '  <span class="status-badge status-' + r.status + '">' + r.status + '</span>',
@@ -448,8 +467,32 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
+// ===== 現場選択 =====
+
+function showSiteSelection(drivers) {
+  document.getElementById('site-driver-name').textContent = drivers[0] ? drivers[0].name : '';
+  var list = document.getElementById('site-list');
+  list.innerHTML = drivers.map(function(d, i) {
+    return '<button class="btn btn-site" data-index="' + i + '">' + escHtml(d.site || '（現場なし）') + '</button>';
+  }).join('');
+  list.querySelectorAll('.btn-site').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      selectSite(drivers[parseInt(btn.dataset.index, 10)]);
+    });
+  });
+  showScreen('site');
+}
+
+function selectSite(driver) {
+  state.selectedDriver = driver;
+  updateDriverInfo(driver);
+  showScreen('main');
+}
+
 function updateDriverInfo(driver) {
-  var text = driver ? (driver.name + ' / ' + driver.site) : state.displayName || '---';
+  var text = driver
+    ? (driver.name + (driver.site ? ' / ' + driver.site : ''))
+    : (state.displayName || '---');
   document.getElementById('driver-info').textContent = text;
 }
 
