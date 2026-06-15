@@ -67,35 +67,57 @@ function handleGetProfile(payload) {
 }
 
 function handleUploadReport(payload) {
-  // payload: { action, lineUserId, yearMonth, mimeType, fileBase64, fileName,
-  //            fileBase64Left, fileBase64Right }  ← 画像は左右分割で送信
   var driver = getDriverByUserId(payload.lineUserId);
   if (!driver) return jsonResponse({ error: 'unauthorized' });
 
   var yearMonth = payload.yearMonth;
   var mimeType  = payload.mimeType || 'image/jpeg';
   var base64    = payload.fileBase64;
-  var fileName  = payload.fileName || ('report_' + yearMonth);
+  var uploadId  = payload.uploadId || '';
+  var origName  = payload.fileName || ('report_' + yearMonth);
+  var fileName  = uploadId ? (uploadId + '_' + origName) : origName;
   var fileType  = mimeType === 'application/pdf' ? 'pdf' : 'image';
 
-  // Drive に元ファイルを保存
+  // Drive に保存
   var fileId  = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
   var fileUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
 
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_RECEIVED);
-  sheet.appendRow([
-    new Date(),                              // [0] タイムスタンプ
-    driver.lineUserId,                       // [1] LINEユーザーID
-    driver.name,                             // [2] ドライバー名
-    yearMonth,                               // [3] 年月
-    fileType,                                // [4] ファイル種別
-    fileId,                                  // [5] DriveファイルID
-    fileUrl,                                 // [6] DriveURL
-    '未処理',                                 // [7] ステータス
-    '',                                      // [8] OCR実行日時
-    payload.consent ? '同意' : '',           // [9] 同意
-    payload.consentAt || '',                 // [10] 同意日時
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // 同一人・同一月の既存受信行を削除（上書き）
+  var recvSheet = ss.getSheetByName(SHEET_RECEIVED);
+  var recvData  = recvSheet.getDataRange().getValues();
+  for (var i = recvData.length - 1; i >= 1; i--) {
+    if (recvData[i][1] === driver.lineUserId && normalizeYearMonth_(recvData[i][3]) === yearMonth) {
+      recvSheet.deleteRow(i + 1);
+    }
+  }
+
+  // 同一人・同一月の既存添付行を削除
+  var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);
+  if (attSheet) {
+    var attData = attSheet.getDataRange().getValues();
+    for (var j = attData.length - 1; j >= 1; j--) {
+      if (attData[j][1] === driver.lineUserId && normalizeYearMonth_(attData[j][3]) === yearMonth) {
+        attSheet.deleteRow(j + 1);
+      }
+    }
+  }
+
+  recvSheet.appendRow([
+    new Date(),                    // [0]  タイムスタンプ
+    driver.lineUserId,             // [1]  LINEユーザーID
+    driver.name,                   // [2]  ドライバー名
+    yearMonth,                     // [3]  年月
+    fileType,                      // [4]  ファイル種別
+    fileId,                        // [5]  DriveファイルID
+    fileUrl,                       // [6]  DriveURL
+    '未処理',                       // [7]  ステータス
+    '',                            // [8]  OCR実行日時
+    payload.consent ? '同意' : '', // [9]  同意
+    payload.consentAt || '',       // [10] 同意日時
+    '',                            // [11] 備考テキスト（OCR後に更新）
+    uploadId,                      // [12] アップロードID
   ]);
 
   // OCR実行（失敗してもアップロード自体は成功扱い）
@@ -127,7 +149,11 @@ function handleUploadAttachment(payload) {
   var yearMonth = payload.yearMonth;
   var mimeType  = payload.mimeType || 'image/jpeg';
   var base64    = payload.fileBase64;
-  var fileName  = payload.fileName || ('attachment_' + yearMonth + '_' + (payload.index + 1));
+  var uploadId  = payload.uploadId || '';
+  var origName  = payload.fileName || ('att_' + (payload.index + 1));
+  var fileName  = uploadId
+    ? (uploadId + '_添付' + (payload.index + 1) + '_' + origName)
+    : origName;
 
   var fileId  = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
   var fileUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
@@ -140,9 +166,10 @@ function handleUploadAttachment(payload) {
     driver.name,        // [2] ドライバー名
     yearMonth,          // [3] 年月
     payload.index || 0, // [4] インデックス
-    fileName,           // [5] ファイル名
+    origName,           // [5] 元ファイル名
     fileId,             // [6] DriveファイルID
     fileUrl,            // [7] DriveURL
+    uploadId,           // [8] アップロードID
   ]);
 
   return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl });

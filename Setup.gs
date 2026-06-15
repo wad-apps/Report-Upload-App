@@ -6,7 +6,7 @@ function setupSheets() {
   var schemas = [
     {
       name: SHEET_RECEIVED,
-      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'ファイル種別', 'DriveファイルID', 'DriveURL', 'ステータス', 'OCR実行日時', '同意', '同意日時', '備考テキスト']
+      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'ファイル種別', 'DriveファイルID', 'DriveURL', 'ステータス', 'OCR実行日時', '同意', '同意日時', '備考テキスト', 'アップロードID']
     },
     {
       name: SHEET_OCR,
@@ -26,7 +26,7 @@ function setupSheets() {
     },
     {
       name: SHEET_ATTACHMENT,
-      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'インデックス', 'ファイル名', 'DriveファイルID', 'DriveURL']
+      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'インデックス', 'ファイル名', 'DriveファイルID', 'DriveURL', 'アップロードID']
     }
   ];
 

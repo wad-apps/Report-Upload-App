@@ -55,13 +55,14 @@ function initApp() {
 
 // ===== API呼び出し =====
 
-function uploadReport(yearMonth, file) {
+function uploadReport(yearMonth, file, uploadId) {
   var isPdf = file.type === 'application/pdf';
 
   var consentPayload = {
     consent:      true,
     consentAt:    new Date().toISOString(),
     agreedItems:  ['1', '2', '3', '4', '5', 'bill'],
+    uploadId:     uploadId,
   };
 
   if (isPdf) {
@@ -270,14 +271,16 @@ function handleSubmit() {
   if (!state.selectedFile) { showToast('ファイルを選択してください'); return; }
   if (!state.lineUserId)   { showToast('ログインし直してください'); return; }
 
+  var uploadId = Math.random().toString(36).substr(2, 6).toUpperCase();
+
   showOverlay(true);
   updateOverlayText('送信中...');
 
-  uploadReport(yearMonth, state.selectedFile)
+  uploadReport(yearMonth, state.selectedFile, uploadId)
     .then(function() {
       if (state.attachmentFiles.length === 0) return Promise.resolve();
       updateOverlayText('添付ファイルをアップロード中... 1/' + state.attachmentFiles.length);
-      return uploadAttachments(yearMonth, state.attachmentFiles, 0);
+      return uploadAttachments(yearMonth, state.attachmentFiles, 0, uploadId);
     })
     .then(function() {
       showOverlay(false);
@@ -291,7 +294,7 @@ function handleSubmit() {
     });
 }
 
-function uploadAttachments(yearMonth, files, index) {
+function uploadAttachments(yearMonth, files, index, uploadId) {
   if (index >= files.length) return Promise.resolve();
   var file = files[index];
 
@@ -313,13 +316,14 @@ function uploadAttachments(yearMonth, files, index) {
       fileBase64: base64,
       fileName:   file.name,
       index:      index,
+      uploadId:   uploadId,
     });
   }).then(function() {
     var next = index + 1;
     if (next < files.length) {
       updateOverlayText('添付ファイルをアップロード中... ' + (next + 1) + '/' + files.length);
     }
-    return uploadAttachments(yearMonth, files, next);
+    return uploadAttachments(yearMonth, files, next, uploadId);
   });
 }
 
