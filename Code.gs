@@ -84,21 +84,23 @@ function handleUploadReport(payload) {
 
   var ss = SpreadsheetApp.openById(SHEET_ID);
 
-  // 同一人・同一月の既存受信行を削除（上書き）
+  // 同一人・同一月の既存受信行を削除（DriveファイルごとW）
   var recvSheet = ss.getSheetByName(SHEET_RECEIVED);
   var recvData  = recvSheet.getDataRange().getValues();
   for (var i = recvData.length - 1; i >= 1; i--) {
     if (recvData[i][1] === driver.lineUserId && normalizeYearMonth_(recvData[i][3]) === yearMonth) {
+      trashDriveFile_(recvData[i][5]); // [5] = DriveファイルID
       recvSheet.deleteRow(i + 1);
     }
   }
 
-  // 同一人・同一月の既存添付行を削除
+  // 同一人・同一月の既存添付行を削除（DriveファイルごとW）
   var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);
   if (attSheet) {
     var attData = attSheet.getDataRange().getValues();
     for (var j = attData.length - 1; j >= 1; j--) {
       if (attData[j][1] === driver.lineUserId && normalizeYearMonth_(attData[j][3]) === yearMonth) {
+        trashDriveFile_(attData[j][6]); // [6] = DriveファイルID
         attSheet.deleteRow(j + 1);
       }
     }
@@ -124,11 +126,11 @@ function handleUploadReport(payload) {
   var ocrResult = null;
   try {
     if (fileType === 'pdf') {
-      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, null, null, base64);
+      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, null, null, base64, uploadId);
     } else {
       var firstBase64  = payload.fileBase64First  || base64;
       var secondBase64 = payload.fileBase64Second || base64;
-      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, firstBase64, secondBase64, null);
+      ocrResult = runOcr(fileId, yearMonth, driver.lineUserId, firstBase64, secondBase64, null, uploadId);
     }
   } catch (ocrErr) {
     Logger.log('OCR error: ' + ocrErr.message);
@@ -236,6 +238,14 @@ function saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName) {
   var driverFolder = getOrCreateFolder_(monthFolder, driver.name);
 
   return driverFolder.createFile(blob).getId();
+}
+
+function trashDriveFile_(fileId) {
+  try {
+    if (fileId) DriveApp.getFileById(fileId).setTrashed(true);
+  } catch (e) {
+    Logger.log('trashDriveFile_ error: ' + fileId + ' / ' + e.message);
+  }
 }
 
 function getOrCreateFolder_(parent, name) {

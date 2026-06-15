@@ -34,7 +34,7 @@ var OCR_PROMPT_META = [
 // ===== メイン関数 =====
 
 // Code.gsのhandleUploadReportから呼ばれる
-function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBase64) {
+function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBase64, uploadId) {
   var driver = getDriverByUserId(lineUserId);
   if (!driver) throw new Error('Driver not found: ' + lineUserId);
 
@@ -74,9 +74,9 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
       noteText = metaResult.noteText;
     }
 
-    writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days);
+    writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days, uploadId);
     if (expenses.length > 0) {
-      saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses);
+      saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses, uploadId);
     }
     if (noteText) {
       updateReceivedNoteText_(fileId, noteText);
@@ -176,7 +176,7 @@ function countWorkingDays_(days) {
 
 // ===== Sheets書き込み =====
 
-function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days) {
+function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploadId) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_OCR);
 
@@ -204,13 +204,14 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days) {
       '',                // [8]  修正後開始時間
       '',                // [9]  修正後終了時間
       fileId,            // [10] 受信ファイルID
+      uploadId || '',    // [11] アップロードID
     ];
   });
 
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
-function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses) {
+function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, uploadId) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_EXPENSE);
   if (!sheet) return;
@@ -232,8 +233,9 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses) {
       exp.category || '',   // [4] 区分
       exp.amount   !== null && exp.amount !== undefined ? exp.amount : '', // [5] 金額
       exp.note     || '',   // [6] 内容
-      '未確認',              // [7] 確認ステータス
+      '',                   // [7] 確認ステータス（廃止・列は維持）
       fileId,               // [8] 受信ファイルID
+      uploadId || '',       // [9] アップロードID
     ];
   });
 

@@ -10,7 +10,7 @@ function setupSheets() {
     },
     {
       name: SHEET_OCR,
-      headers: ['LINEユーザーID', 'ドライバー名', '年月', '日', '開始時間', '終了時間', '稼働フラグ', '確認ステータス', '修正後開始時間', '修正後終了時間', '受信ファイルID']
+      headers: ['LINEユーザーID', 'ドライバー名', '年月', '日', '開始時間', '終了時間', '稼働フラグ', '確認ステータス', '修正後開始時間', '修正後終了時間', '受信ファイルID', 'アップロードID']
     },
     {
       name: SHEET_DRIVER,
@@ -22,7 +22,7 @@ function setupSheets() {
     },
     {
       name: SHEET_EXPENSE,
-      headers: ['LINEユーザーID', 'ドライバー名', '年月', '行番号', '区分', '金額', '内容', '確認ステータス', '受信ファイルID']
+      headers: ['LINEユーザーID', 'ドライバー名', '年月', '行番号', '区分', '金額', '内容', '確認ステータス', '受信ファイルID', 'アップロードID']
     },
     {
       name: SHEET_ATTACHMENT,
@@ -48,4 +48,44 @@ function setupSheets() {
   }
 
   Logger.log('シート作成完了: ' + schemas.map(function(s){ return s.name; }).join(', '));
+}
+
+// アップロードIDを既存OCR・立替明細行に紐づける（一回限りのバックフィル）
+function backfillUploadIds() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // SHEET_RECEIVED から (lineUserId|yearMonth) → uploadId のマップを構築
+  var recvData = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
+  var uidMap = {};
+  recvData.slice(1).forEach(function(row) {
+    var uid      = row[1];
+    var ym       = normalizeYearMonth_(row[3]);
+    var uploadId = row[12]; // アップロードID
+    if (uid && ym && uploadId) uidMap[uid + '|' + ym] = uploadId;
+  });
+
+  var updated = { ocr: 0, expense: 0 };
+
+  // SHEET_OCR の [11] が空の行を更新
+  var ocrSheet = ss.getSheetByName(SHEET_OCR);
+  var ocrData  = ocrSheet.getDataRange().getValues();
+  for (var i = 1; i < ocrData.length; i++) {
+    if (ocrData[i][11]) continue;
+    var ocrUid = uidMap[ocrData[i][0] + '|' + normalizeYearMonth_(ocrData[i][2])];
+    if (ocrUid) { ocrSheet.getRange(i + 1, 12).setValue(ocrUid); updated.ocr++; }
+  }
+
+  // SHEET_EXPENSE の [9] が空の行を更新
+  var expSheet = ss.getSheetByName(SHEET_EXPENSE);
+  if (expSheet) {
+    var expData = expSheet.getDataRange().getValues();
+    for (var j = 1; j < expData.length; j++) {
+      if (expData[j][9]) continue;
+      var expUid = uidMap[expData[j][0] + '|' + normalizeYearMonth_(expData[j][2])];
+      if (expUid) { expSheet.getRange(j + 1, 10).setValue(expUid); updated.expense++; }
+    }
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log('バックフィル完了: OCR ' + updated.ocr + '件, 立替 ' + updated.expense + '件');
 }

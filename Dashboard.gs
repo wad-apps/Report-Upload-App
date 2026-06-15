@@ -160,7 +160,6 @@ function handleAdminGetOcrDetail_(payload) {
         category: row[4],
         amount:   row[5],
         note:     row[6],
-        status:   row[7],
       });
     });
     expenses.sort(function(a, b) { return a.row - b.row; });

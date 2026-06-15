@@ -235,7 +235,7 @@ function updateOcrSummary(unitPrice) {
 function renderExpenses(expenses) {
   var tbody = document.getElementById('expense-tbody');
   if (!expenses || expenses.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">立替なし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">立替なし</td></tr>';
     return;
   }
   tbody.innerHTML = expenses.map(function(e) {
@@ -246,7 +246,6 @@ function renderExpenses(expenses) {
       '<td>' + escHtml(e.category || '') + '</td>',
       '<td>' + amount + '</td>',
       '<td>' + escHtml(e.note || '') + '</td>',
-      '<td><span class="badge badge-' + escHtml(e.status || '') + '">' + escHtml(e.status || '') + '</span></td>',
       '</tr>',
     ].join('');
   }).join('');
