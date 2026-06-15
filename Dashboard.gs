@@ -93,7 +93,7 @@ function handleAdminGetDriverList_(payload) {
   });
 
   // 対象年月の受信ファイルをドライバー×現場ごとに集約（最新1件）
-  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [7]=fileUrl, [8]=status, [9]=ocrTime
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [6]=fileId, [7]=fileUrl, [8]=status, [9]=ocrTime
   var submissionMap = {};
   recvData.slice(1).forEach(function(row) {
     if (normalizeYearMonth_(row[4]) !== yearMonth) return;
@@ -106,6 +106,7 @@ function handleAdminGetDriverList_(payload) {
         ts:        ts,
         uid:       uid,
         site:      site,
+        fileId:    row[6] || '',
         fileUrl:   row[7],
         fileType:  row[5],
         status:    row[8],
@@ -135,14 +136,26 @@ function handleAdminGetDriverList_(payload) {
     }
   });
 
-  var driverFolderUrls = getMonthDriverFolderUrls_(yearMonth);
+  // 月報ファイルの親フォルダURLをfileIdから直接取得（フォルダ名依存を避ける）
+  var folderUrlByKey = {};
+  Object.keys(submissionMap).forEach(function(key) {
+    var fileId = submissionMap[key].fileId;
+    if (!fileId) return;
+    try {
+      var parents = DriveApp.getFileById(fileId).getParents();
+      if (parents.hasNext()) {
+        folderUrlByKey[key] = 'https://drive.google.com/drive/folders/' + parents.next().getId();
+      }
+    } catch (e) {
+      Logger.log('folderUrl lookup error key=' + key + ' fileId=' + fileId + ': ' + e.message);
+    }
+  });
 
   var list = Object.keys(submissionMap).map(function(key) {
-    var sub       = submissionMap[key];
-    var d         = driverMap[key] || uidFallbackMap[sub.uid] || {};
-    var wd        = workingDaysMap[key] || 0;
-    var up        = d.unitPrice || 0;
-    var folderKey = (d.name || '') + (d.site ? '_' + d.site : '');
+    var sub = submissionMap[key];
+    var d   = driverMap[key] || uidFallbackMap[sub.uid] || {};
+    var wd  = workingDaysMap[key] || 0;
+    var up  = d.unitPrice || 0;
     return {
       lineUserId:    sub.uid,
       driverName:    d.name || '',
@@ -155,7 +168,7 @@ function handleAdminGetDriverList_(payload) {
       workingDays:   wd,
       billingAmount: confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
       isConfirmed:   !!confirmedMap[key],
-      folderUrl:     driverFolderUrls[folderKey] || '',
+      folderUrl:     folderUrlByKey[key] || '',
     };
   });
 
@@ -188,13 +201,15 @@ function handleAdminGetOcrDetail_(payload) {
   });
   days.sort(function(a, b) { return a.day - b.day; });
 
-  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [7]=fileUrl, [12]=noteText
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId, [7]=fileUrl, [12]=noteText
   var recvData = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
   var fileUrl  = '';
+  var fileId   = '';
   var noteText = '';
   recvData.slice(1).forEach(function(row) {
     if (row[1] === lineUserId && normalizeYearMonth_(row[4]) === yearMonth && (row[3] || '') === site) {
       fileUrl  = row[7];
+      fileId   = row[6] || '';
       noteText = row[12] || '';
     }
   });
@@ -231,9 +246,17 @@ function handleAdminGetOcrDetail_(payload) {
   }
 
   var driver = getDriverByUserIdAndSite_(lineUserId, site) || {};
-  var folderName = driver.site ? ((driver.name || '') + '_' + driver.site) : (driver.name || '');
-  var folderUrls = getMonthDriverFolderUrls_(yearMonth);
-  var folderUrl  = folderUrls[folderName] || '';
+  var folderUrl = '';
+  if (fileId) {
+    try {
+      var parents = DriveApp.getFileById(fileId).getParents();
+      if (parents.hasNext()) {
+        folderUrl = 'https://drive.google.com/drive/folders/' + parents.next().getId();
+      }
+    } catch (e) {
+      Logger.log('folderUrl lookup error fileId=' + fileId + ': ' + e.message);
+    }
+  }
 
   return jsonResponse({
     days:        days,
