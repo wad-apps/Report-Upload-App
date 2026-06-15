@@ -217,6 +217,6 @@ Drive API が切れていると空になる。
 ## 関連リンク
 
 - GAS エディタ: https://script.google.com（プロジェクト名: ReportUploadApp または類似）
-- GitHub リポジトリ: https://github.com/kita-wad/Report-Upload-App
+- GitHub リポジトリ: https://github.com/wad-apps/Report-Upload-App
 - Google Spreadsheet: https://docs.google.com/spreadsheets/d/1vPSbmyEUov0-hasJ9YVqggt2ClP9Blx8Do1zqlb8chc
 - Google Drive フォルダ: https://drive.google.com/drive/folders/1T9j-k7DY5DGwscHQQlhIkEEE4uggQGXR
