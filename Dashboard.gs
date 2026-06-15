@@ -93,7 +93,7 @@ function handleAdminGetDriverList_(payload) {
   });
 
   // 対象年月の受信ファイルをドライバー×現場ごとに集約（最新1件）
-  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [6]=fileId, [7]=fileUrl, [8]=status, [9]=ocrTime
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [6]=fileId, [7]=fileUrl, [8]=status, [9]=ocrTime, [14]=folderUrl
   var submissionMap = {};
   recvData.slice(1).forEach(function(row) {
     if (normalizeYearMonth_(row[4]) !== yearMonth) return;
@@ -111,6 +111,7 @@ function handleAdminGetDriverList_(payload) {
         fileType:  row[5],
         status:    row[8],
         ocrTime:   row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'MM/dd HH:mm') : '',
+        folderUrl: row[14] || '',
       };
     }
   });
@@ -136,7 +137,7 @@ function handleAdminGetDriverList_(payload) {
     }
   });
 
-  // ドライバーフォルダURL一覧（フォルダ名→URL）
+  // フォルダURLはアップロード時に保存済みの値を優先し、旧データはDriveスキャンで補完
   var folderUrlMap = getMonthDriverFolderUrls_(yearMonth);
 
   var list = Object.keys(submissionMap).map(function(key) {
@@ -157,7 +158,7 @@ function handleAdminGetDriverList_(payload) {
       workingDays:   wd,
       billingAmount: confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
       isConfirmed:   !!confirmedMap[key],
-      folderUrl:     folderUrlMap[folderName] || '',
+      folderUrl:     sub.folderUrl || folderUrlMap[folderName] || '',
     };
   });
 
@@ -190,16 +191,18 @@ function handleAdminGetOcrDetail_(payload) {
   });
   days.sort(function(a, b) { return a.day - b.day; });
 
-  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId, [7]=fileUrl, [12]=noteText
-  var recvData = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
-  var fileUrl  = '';
-  var fileId   = '';
-  var noteText = '';
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId, [7]=fileUrl, [12]=noteText, [14]=folderUrl
+  var recvData  = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
+  var fileUrl   = '';
+  var fileId    = '';
+  var noteText  = '';
+  var folderUrl = '';
   recvData.slice(1).forEach(function(row) {
     if (row[1] === lineUserId && normalizeYearMonth_(row[4]) === yearMonth && (row[3] || '') === site) {
-      fileUrl  = row[7];
-      fileId   = row[6] || '';
-      noteText = row[12] || '';
+      fileUrl   = row[7];
+      fileId    = row[6] || '';
+      noteText  = row[12] || '';
+      folderUrl = row[14] || '';
     }
   });
 
@@ -234,10 +237,13 @@ function handleAdminGetOcrDetail_(payload) {
     attachments.sort(function(a, b) { return a.index - b.index; });
   }
 
-  var driver       = getDriverByUserIdAndSite_(lineUserId, site) || {};
-  var folderUrlMap = getMonthDriverFolderUrls_(yearMonth);
-  var folderName   = driver.site ? (driver.name + '_' + driver.site) : (driver.name || '');
-  var folderUrl    = folderUrlMap[folderName] || '';
+  var driver = getDriverByUserIdAndSite_(lineUserId, site) || {};
+  // 旧データでfolderUrlが未保存の場合のみDriveスキャンで補完
+  if (!folderUrl) {
+    var folderUrlMap = getMonthDriverFolderUrls_(yearMonth);
+    var folderName   = driver.site ? (driver.name + '_' + driver.site) : (driver.name || '');
+    folderUrl        = folderUrlMap[folderName] || '';
+  }
 
   return jsonResponse({
     days:        days,

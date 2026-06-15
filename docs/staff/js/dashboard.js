@@ -54,7 +54,7 @@ function setupEvents() {
     loadDashboard();
   });
 
-  document.getElementById('btn-save-correction').addEventListener('click', handleSaveCorrection);
+  document.getElementById('btn-save-correction').addEventListener('click', function() { handleSaveCorrection(false); });
   document.getElementById('btn-confirm-month').addEventListener('click', handleConfirmMonth);
 
   document.getElementById('btn-export').addEventListener('click', handleExport);

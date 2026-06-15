@@ -81,8 +81,10 @@ function handleUploadReport(payload) {
   var fileType  = mimeType === 'application/pdf' ? 'pdf' : 'image';
 
   // Drive に保存
-  var fileId  = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
-  var fileUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
+  var driveResult = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
+  var fileId      = driveResult.fileId;
+  var fileUrl     = 'https://drive.google.com/file/d/' + fileId + '/view';
+  var folderUrl   = 'https://drive.google.com/drive/folders/' + driveResult.folderId;
 
   var ss = SpreadsheetApp.openById(SHEET_ID);
 
@@ -129,6 +131,7 @@ function handleUploadReport(payload) {
     formatConsentAt_(payload.consentAt), // [11] 同意日時
     '',                            // [12] 備考テキスト（OCR後に更新）
     uploadId,                      // [13] アップロードID
+    folderUrl,                     // [14] フォルダURL
   ]);
 
   // OCR実行（失敗してもアップロード自体は成功扱い）
@@ -167,7 +170,8 @@ function handleUploadAttachment(payload) {
     ? (uploadId + '_添付' + (payload.index + 1) + '_' + origName)
     : origName;
 
-  var fileId  = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
+  var driveResult = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
+  var fileId  = driveResult.fileId;
   var fileUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
 
   var ss    = SpreadsheetApp.openById(SHEET_ID);
@@ -307,7 +311,10 @@ function saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName) {
   var folderName   = driver.site ? (driver.name + '_' + driver.site) : driver.name;
   var driverFolder = getOrCreateFolder_(monthFolder, folderName);
 
-  return driverFolder.createFile(blob).getId();
+  return {
+    fileId:   driverFolder.createFile(blob).getId(),
+    folderId: driverFolder.getId(),
+  };
 }
 
 function trashDriveFile_(fileId) {
