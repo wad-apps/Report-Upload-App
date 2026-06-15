@@ -16,9 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('input-yearmonth').value = ym;
   state.yearMonth = ym;
 
-  initGis();
-
   var savedToken = sessionStorage.getItem('idToken');
+  initGis(!savedToken); // savedTokenがある場合はauto_selectを無効にして競合を防ぐ
+
   if (savedToken) {
     state.idToken = savedToken;
     showScreen('main');
@@ -61,11 +61,11 @@ function setupEvents() {
 }
 
 // ===== Googleサインイン =====
-function initGis() {
+function initGis(autoSelect) {
   google.accounts.id.initialize({
     client_id:   OAUTH_CLIENT_ID,
     callback:    handleCredentialResponse,
-    auto_select: true,
+    auto_select: !!autoSelect,
   });
   google.accounts.id.renderButton(
     document.getElementById('g-signin-btn'),
@@ -417,7 +417,6 @@ function adminPost(payload) {
       sessionStorage.removeItem('idToken');
       state.idToken = null;
       showScreen('login');
-      google.accounts.id.prompt();
       throw new Error('unauthorized');
     }
     if (json.error) throw new Error(json.error);
