@@ -113,6 +113,9 @@ function renderDriverTable(drivers) {
     var fileLink    = d.fileUrl
       ? '<a href="' + escHtml(d.fileUrl) + '" target="_blank" class="btn btn-sm btn-ghost">画像 ↗</a>'
       : '';
+    var folderLink  = d.folderUrl
+      ? '<a href="' + escHtml(d.folderUrl) + '" target="_blank" class="btn btn-sm btn-ghost">フォルダ ↗</a>'
+      : '';
     return [
       '<tr>',
       '<td><strong>' + escHtml(d.driverName) + '</strong></td>',
@@ -121,7 +124,7 @@ function renderDriverTable(drivers) {
       '<td>' + billingText + '</td>',
       '<td><span class="badge ' + badgeClass + '">' + d.status + '</span></td>',
       '<td style="color:var(--text-sub);font-size:12px">' + ocrTime + '</td>',
-      '<td style="display:flex;gap:6px;align-items:center">' + fileLink +
+      '<td style="display:flex;gap:6px;align-items:center">' + fileLink + folderLink +
           '<button class="btn btn-sm btn-outline btn-review" ' + btnDisabled +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
           ' data-name="' + escHtml(d.driverName) + '">' + btnLabel + '</button></td>',
@@ -272,6 +275,10 @@ function handleSaveCorrection() {
     });
   });
 
+  var btn = document.getElementById('btn-save-correction');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
   adminPost({
     action:      'adminSaveCorrection',
     adminToken:  state.token,
@@ -280,6 +287,11 @@ function handleSaveCorrection() {
     corrections: corrections,
   }).then(function() {
     showToast('修正を保存しました');
+  }).catch(function() {
+    showToast('保存に失敗しました');
+  }).then(function() {
+    btn.disabled = false;
+    btn.textContent = '修正を保存';
   });
 }
 

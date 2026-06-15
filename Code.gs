@@ -115,7 +115,7 @@ function handleUploadReport(payload) {
     '未処理',                       // [7]  ステータス
     '',                            // [8]  OCR実行日時
     payload.consent ? '同意' : '', // [9]  同意
-    payload.consentAt || '',       // [10] 同意日時
+    formatConsentAt_(payload.consentAt), // [10] 同意日時
     '',                            // [11] 備考テキスト（OCR後に更新）
     uploadId,                      // [12] アップロードID
   ]);
@@ -242,6 +242,15 @@ function getOrCreateFolder_(parent, name) {
   var iter = parent.getFoldersByName(name);
   if (iter.hasNext()) return iter.next();
   return parent.createFolder(name);
+}
+
+function formatConsentAt_(isoStr) {
+  if (!isoStr) return '';
+  try {
+    return Utilities.formatDate(new Date(isoStr), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+  } catch (e) {
+    return isoStr;
+  }
 }
 
 function jsonResponse(data) {

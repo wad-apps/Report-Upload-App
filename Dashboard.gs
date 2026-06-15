@@ -89,6 +89,8 @@ function handleAdminGetDriverList_(payload) {
     if (normalizeYearMonth_(row[2]) === yearMonth) confirmedMap[row[0]] = { billingAmount: row[7] };
   });
 
+  var driverFolderUrls = getMonthDriverFolderUrls_(yearMonth);
+
   var list = Object.keys(submissionMap).map(function(uid) {
     var sub = submissionMap[uid];
     var d   = driverMap[uid] || {};
@@ -106,6 +108,7 @@ function handleAdminGetDriverList_(payload) {
       workingDays:   wd,
       billingAmount: confirmedMap[uid] ? confirmedMap[uid].billingAmount : wd * up,
       isConfirmed:   !!confirmedMap[uid],
+      folderUrl:     driverFolderUrls[d.name || ''] || '',
     };
   });
 
@@ -205,7 +208,7 @@ function handleAdminSaveCorrection_(payload) {
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (row[0] !== lineUserId || row[2] !== yearMonth) continue;
+    if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth) continue;
     var c = corrMap[row[3]];
     if (!c) continue;
     var isWorking = c.fixedStart !== '';
@@ -306,6 +309,25 @@ function handleAdminExportData_(payload) {
 
   rows.sort(function(a, b) { return a.driverName.localeCompare(b.driverName, 'ja'); });
   return jsonResponse({ rows: rows, yearMonth: yearMonth });
+}
+
+// 対象年月のドライバーフォルダURL一覧を { driverName: url } で返す
+function getMonthDriverFolderUrls_(yearMonth) {
+  var result = {};
+  try {
+    var rootFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var monthIter  = rootFolder.getFoldersByName(yearMonth);
+    if (!monthIter.hasNext()) return result;
+    var monthFolder  = monthIter.next();
+    var driverIter   = monthFolder.getFolders();
+    while (driverIter.hasNext()) {
+      var f = driverIter.next();
+      result[f.getName()] = 'https://drive.google.com/drive/folders/' + f.getId();
+    }
+  } catch (e) {
+    Logger.log('getMonthDriverFolderUrls_ error: ' + e.message);
+  }
+  return result;
 }
 
 // ===== ユーティリティ =====

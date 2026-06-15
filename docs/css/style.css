@@ -84,13 +84,15 @@ body {
 /* ===== 年月入力 ===== */
 .input-month {
   width: 100%;
+  max-width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
-  font-size: 18px;
-  padding: 12px 16px;
+  font-size: 16px;
+  padding: 10px 12px;
   outline: none;
+  box-sizing: border-box;
 }
 .input-month:focus { border-color: var(--accent); }
 
