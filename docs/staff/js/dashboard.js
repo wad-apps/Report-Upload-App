@@ -35,6 +35,9 @@ function setupEvents() {
     sessionStorage.removeItem('idToken');
     state.idToken = null;
     google.accounts.id.disableAutoSelect();
+    var loadingEl = document.getElementById('login-loading');
+    if (loadingEl) loadingEl.classList.add('hidden');
+    document.getElementById('login-error').classList.add('hidden');
     showScreen('login');
     google.accounts.id.prompt();
   });
@@ -90,6 +93,7 @@ function handleCredentialResponse(response) {
       state.idToken = idToken;
       sessionStorage.setItem('idToken', idToken);
       _authInProgress = false;
+      if (loadingEl) loadingEl.classList.add('hidden');
       showScreen('main');
       loadDashboard();
     })
@@ -196,6 +200,15 @@ function openOcrScreen(lineUserId, driverName, site, folderUrl) {
       fileLinkEl.classList.remove('hidden');
     } else {
       fileLinkEl.classList.add('hidden');
+    }
+
+    var resolvedFolder = res.folderUrl || folderUrl;
+    var folderLinkEl   = document.getElementById('ocr-folder-link');
+    if (resolvedFolder) {
+      folderLinkEl.href = resolvedFolder;
+      folderLinkEl.classList.remove('hidden');
+    } else {
+      folderLinkEl.classList.add('hidden');
     }
 
     renderOcrTable(res.days, res.driver);

@@ -230,10 +230,16 @@ function handleAdminGetOcrDetail_(payload) {
     attachments.sort(function(a, b) { return a.index - b.index; });
   }
 
+  var driver = getDriverByUserIdAndSite_(lineUserId, site) || {};
+  var folderName = driver.site ? ((driver.name || '') + '_' + driver.site) : (driver.name || '');
+  var folderUrls = getMonthDriverFolderUrls_(yearMonth);
+  var folderUrl  = folderUrls[folderName] || '';
+
   return jsonResponse({
     days:        days,
     fileUrl:     fileUrl,
-    driver:      getDriverByUserIdAndSite_(lineUserId, site) || {},
+    folderUrl:   folderUrl,
+    driver:      driver,
     yearMonth:   yearMonth,
     expenses:    expenses,
     noteText:    noteText,
