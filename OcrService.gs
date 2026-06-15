@@ -38,6 +38,9 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
   var driver = getDriverByUserIdAndSite_(lineUserId, site || '');
   if (!driver) throw new Error('Driver not found: ' + lineUserId);
 
+  var apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
+  if (!apiKey) throw new Error('CLAUDE_API_KEY not set in Script Properties');
+
   updateReceivedFileStatus_(fileId, 'OCR中');
 
   try {
@@ -47,28 +50,30 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
     var noteText = '';
 
     if (pdfBase64) {
-      // PDF: DAYS と META を同一PDFに対し2パスで読む
-      var daysRaw  = callClaudeApi_(pdfBase64, 'application/pdf', OCR_PROMPT_DAYS);
-      var metaRaw  = callClaudeApi_(pdfBase64, 'application/pdf', OCR_PROMPT_META);
-      var daysResult = parseDaysResult_(daysRaw);
-      var metaResult = parseMetaResult_(metaRaw);
+      // PDF: DAYS と META を並行実行
+      var results = callClaudeApiBatch_(apiKey, [
+        { base64: pdfBase64, mimeType: 'application/pdf', prompt: OCR_PROMPT_DAYS },
+        { base64: pdfBase64, mimeType: 'application/pdf', prompt: OCR_PROMPT_META },
+      ]);
+      var daysResult = parseDaysResult_(results[0]);
+      var metaResult = parseMetaResult_(results[1]);
       days     = daysResult.days;
       hasNote  = metaResult.hasNote;
       expenses = metaResult.expenses;
       noteText = metaResult.noteText;
     } else {
-      // 画像: 前半・後半で DAYS プロンプト（2回）、後半のみで META プロンプト（1回）
+      // 画像: 前半DAYS・後半DAYS・後半METAを同時並行（3リクエスト一括）
       var promptFirst  = OCR_PROMPT_DAYS + '\n\n【補足】これは月報の前半部分の画像です。';
       var promptSecond = OCR_PROMPT_DAYS + '\n\n【補足】これは月報の後半部分の画像です。';
-      var firstRaw  = callClaudeApi_(firstBase64,  'image/jpeg', promptFirst);
-      var secondRaw = callClaudeApi_(secondBase64, 'image/jpeg', promptSecond);
-      var firstResult  = parseDaysResult_(firstRaw);
-      var secondResult = parseDaysResult_(secondRaw);
-      days = mergeHalves_(firstResult.days, secondResult.days);
-
-      // 立替・備考は後半画像に丸ごと収まるため後半からのみ読む
-      var metaRaw    = callClaudeApi_(secondBase64, 'image/jpeg', OCR_PROMPT_META);
-      var metaResult = parseMetaResult_(metaRaw);
+      var results = callClaudeApiBatch_(apiKey, [
+        { base64: firstBase64,  mimeType: 'image/jpeg', prompt: promptFirst },
+        { base64: secondBase64, mimeType: 'image/jpeg', prompt: promptSecond },
+        { base64: secondBase64, mimeType: 'image/jpeg', prompt: OCR_PROMPT_META },
+      ]);
+      var firstResult  = parseDaysResult_(results[0]);
+      var secondResult = parseDaysResult_(results[1]);
+      days     = mergeHalves_(firstResult.days, secondResult.days);
+      var metaResult = parseMetaResult_(results[2]);
       hasNote  = metaResult.hasNote;
       expenses = metaResult.expenses;
       noteText = metaResult.noteText;
@@ -78,11 +83,7 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
     if (expenses.length > 0) {
       saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses, uploadId, site || '');
     }
-    if (noteText) {
-      updateReceivedNoteText_(fileId, noteText);
-    }
-    updateReceivedFileStatus_(fileId, '確認待ち');
-    updateReceivedOcrTime_(fileId);
+    finalizeReceivedRow_(fileId, '確認待ち', noteText);
 
     return { workingDays: countWorkingDays_(days), days: days };
 
@@ -94,38 +95,39 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
 
 // ===== Claude API呼び出し =====
 
-function callClaudeApi_(base64, mimeType, prompt) {
-  var apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
-  if (!apiKey) throw new Error('CLAUDE_API_KEY not set in Script Properties');
-
+function buildClaudeRequest_(base64, mimeType, prompt, apiKey) {
   var contentItem = mimeType === 'application/pdf'
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
     : { type: 'image',    source: { type: 'base64', media_type: mimeType,           data: base64 } };
 
-  var body = {
-    model:      CLAUDE_MODEL,
-    max_tokens: 2048,
-    messages: [{
-      role: 'user',
-      content: [contentItem, { type: 'text', text: prompt }]
-    }]
-  };
-
-  var res = UrlFetchApp.fetch(CLAUDE_API_URL, {
-    method:           'post',
+  return {
+    url:    CLAUDE_API_URL,
+    method: 'post',
     headers: {
-      'x-api-key':          apiKey,
-      'anthropic-version':  '2023-06-01',
-      'content-type':       'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type':      'application/json',
     },
-    payload:          JSON.stringify(body),
+    payload: JSON.stringify({
+      model:      CLAUDE_MODEL,
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: [contentItem, { type: 'text', text: prompt }] }],
+    }),
     muteHttpExceptions: true,
+  };
+}
+
+// requests: [{base64, mimeType, prompt}, ...]  → 全件を fetchAll で並行実行し、レスポンステキスト配列を返す
+function callClaudeApiBatch_(apiKey, requests) {
+  var fetchReqs = requests.map(function(r) {
+    return buildClaudeRequest_(r.base64, r.mimeType, r.prompt, apiKey);
   });
-
-  var json = JSON.parse(res.getContentText());
-  if (json.error) throw new Error('Claude API error: ' + json.error.message);
-
-  return json.content[0].text;
+  var responses = UrlFetchApp.fetchAll(fetchReqs);
+  return responses.map(function(res, i) {
+    var json = JSON.parse(res.getContentText());
+    if (json.error) throw new Error('Claude API error[' + i + ']: ' + json.error.message);
+    return json.content[0].text;
+  });
 }
 
 // ===== パース・マージ =====
@@ -256,35 +258,25 @@ function updateReceivedFileStatus_(fileId, status) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
-
   for (var i = 1; i < data.length; i++) {
     if (data[i][6] === fileId) {
-      sheet.getRange(i + 1, 9).setValue(status); // [8]=status → col 9
+      sheet.getRange(i + 1, 9).setValue(status);
       return;
     }
   }
 }
 
-function updateReceivedNoteText_(fileId, noteText) {
+// OCR完了時に status・OCR実行日時・備考テキストをシートスキャン1回でまとめて更新
+function finalizeReceivedRow_(fileId, status, noteText) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (data[i][6] === fileId) {
-      sheet.getRange(i + 1, 13).setValue(noteText); // [12]=備考テキスト → col 13
-      return;
-    }
-  }
-}
-
-function updateReceivedOcrTime_(fileId) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_RECEIVED);
-  var data  = sheet.getDataRange().getValues();
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][6] === fileId) {
-      sheet.getRange(i + 1, 10).setValue(new Date()); // [9]=ocrTime → col 10
+      var row = i + 1;
+      sheet.getRange(row, 9).setValue(status);         // [8] ステータス
+      sheet.getRange(row, 10).setValue(new Date());    // [9] OCR実行日時
+      if (noteText) sheet.getRange(row, 13).setValue(noteText); // [12] 備考テキスト
       return;
     }
   }
