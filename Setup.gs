@@ -17,11 +17,13 @@ function setupSheets() {
   var schemas = [
     {
       name: SHEET_RECEIVED,
-      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'ファイル種別', 'DriveファイルID', 'DriveURL', 'ステータス', 'OCR実行日時', '同意', '同意日時', '備考テキスト', 'アップロードID', '現場名']
+      // [0]timestamp [1]uid [2]name [3]site [4]yearMonth [5]fileType [6]fileId [7]fileUrl [8]status [9]ocrTime [10]consent [11]consentAt [12]noteText [13]uploadId
+      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '現場名', '年月', 'ファイル種別', 'DriveファイルID', 'DriveURL', 'ステータス', 'OCR実行日時', '同意', '同意日時', '備考テキスト', 'アップロードID']
     },
     {
       name: SHEET_OCR,
-      headers: ['LINEユーザーID', 'ドライバー名', '年月', '日', '開始時間', '終了時間', '稼働フラグ', '確認ステータス', '修正後開始時間', '修正後終了時間', '受信ファイルID', 'アップロードID', '現場名']
+      // [0]uid [1]name [2]site [3]yearMonth [4]day [5]start [6]end [7]isWorking [8]status [9]fixedStart [10]fixedEnd [11]fileId [12]uploadId
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '日', '開始時間', '終了時間', '稼働フラグ', '確認ステータス', '修正後開始時間', '修正後終了時間', '受信ファイルID', 'アップロードID']
     },
     {
       name: SHEET_DRIVER,
@@ -29,15 +31,18 @@ function setupSheets() {
     },
     {
       name: SHEET_MONTHLY,
-      headers: ['LINEユーザーID', 'ドライバー名', '年月', '稼働日数', '実働時間合計(分)', '超過時間合計(分)', '単価', '請求金額', '確定日時', '現場名']
+      // [0]uid [1]name [2]site [3]yearMonth [4]workingDays [5]totalMin [6]overMin [7]unitPrice [8]billingAmount [9]confirmedAt
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '稼働日数', '実働時間合計(分)', '超過時間合計(分)', '単価', '請求金額', '確定日時']
     },
     {
       name: SHEET_EXPENSE,
-      headers: ['LINEユーザーID', 'ドライバー名', '年月', '行番号', '区分', '金額', '内容', '受信ファイルID', 'アップロードID', '現場名']
+      // [0]uid [1]name [2]site [3]yearMonth [4]row# [5]category [6]amount [7]note [8]fileId [9]uploadId
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '行番号', '区分', '金額', '内容', '受信ファイルID', 'アップロードID']
     },
     {
       name: SHEET_ATTACHMENT,
-      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '年月', 'インデックス', 'ファイル名', 'DriveファイルID', 'DriveURL', 'アップロードID', '現場名']
+      // [0]timestamp [1]uid [2]name [3]site [4]yearMonth [5]index [6]fileName [7]fileId [8]fileUrl [9]uploadId
+      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '現場名', '年月', 'インデックス', 'ファイル名', 'DriveファイルID', 'DriveURL', 'アップロードID']
     }
   ];
 
@@ -66,34 +71,35 @@ function backfillUploadIds() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
 
   // SHEET_RECEIVED から (lineUserId|yearMonth) → uploadId のマップを構築
+  // SHEET_RECEIVED: [1]=uid, [4]=yearMonth, [13]=uploadId
   var recvData = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
   var uidMap = {};
   recvData.slice(1).forEach(function(row) {
     var uid      = row[1];
-    var ym       = normalizeYearMonth_(row[3]);
-    var uploadId = row[12]; // アップロードID
+    var ym       = normalizeYearMonth_(row[4]);
+    var uploadId = row[13]; // アップロードID
     if (uid && ym && uploadId) uidMap[uid + '|' + ym] = uploadId;
   });
 
   var updated = { ocr: 0, expense: 0 };
 
-  // SHEET_OCR の [11] が空の行を更新
+  // SHEET_OCR: [12]=uploadId, [0]=uid, [3]=yearMonth
   var ocrSheet = ss.getSheetByName(SHEET_OCR);
   var ocrData  = ocrSheet.getDataRange().getValues();
   for (var i = 1; i < ocrData.length; i++) {
-    if (ocrData[i][11]) continue;
-    var ocrUid = uidMap[ocrData[i][0] + '|' + normalizeYearMonth_(ocrData[i][2])];
-    if (ocrUid) { ocrSheet.getRange(i + 1, 12).setValue(ocrUid); updated.ocr++; }
+    if (ocrData[i][12]) continue;
+    var ocrUid = uidMap[ocrData[i][0] + '|' + normalizeYearMonth_(ocrData[i][3])];
+    if (ocrUid) { ocrSheet.getRange(i + 1, 13).setValue(ocrUid); updated.ocr++; }
   }
 
-  // SHEET_EXPENSE の [9] が空の行を更新
+  // SHEET_EXPENSE: [9]=uploadId, [0]=uid, [3]=yearMonth
   var expSheet = ss.getSheetByName(SHEET_EXPENSE);
   if (expSheet) {
     var expData = expSheet.getDataRange().getValues();
     for (var j = 1; j < expData.length; j++) {
-      if (expData[j][8]) continue;
-      var expUid = uidMap[expData[j][0] + '|' + normalizeYearMonth_(expData[j][2])];
-      if (expUid) { expSheet.getRange(j + 1, 9).setValue(expUid); updated.expense++; }
+      if (expData[j][9]) continue;
+      var expUid = uidMap[expData[j][0] + '|' + normalizeYearMonth_(expData[j][3])];
+      if (expUid) { expSheet.getRange(j + 1, 10).setValue(expUid); updated.expense++; }
     }
   }
 

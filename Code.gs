@@ -86,26 +86,28 @@ function handleUploadReport(payload) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
 
   // 同一人・同一月・同一現場の既存受信行を削除（Driveファイルごと）
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId
   var recvSheet = ss.getSheetByName(SHEET_RECEIVED);
   var recvData  = recvSheet.getDataRange().getValues();
   for (var i = recvData.length - 1; i >= 1; i--) {
     if (recvData[i][1] === driver.lineUserId &&
-        normalizeYearMonth_(recvData[i][3]) === yearMonth &&
-        (recvData[i][13] || '') === site) {
-      trashDriveFile_(recvData[i][5]); // [5] = DriveファイルID
+        normalizeYearMonth_(recvData[i][4]) === yearMonth &&
+        (recvData[i][3] || '') === site) {
+      trashDriveFile_(recvData[i][6]); // [6] = DriveファイルID
       recvSheet.deleteRow(i + 1);
     }
   }
 
   // 同一人・同一月・同一現場の既存添付行を削除（Driveファイルごと）
+  // SHEET_ATTACHMENT: [1]=uid, [3]=site, [4]=yearMonth, [7]=fileId
   var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);
   if (attSheet) {
     var attData = attSheet.getDataRange().getValues();
     for (var j = attData.length - 1; j >= 1; j--) {
       if (attData[j][1] === driver.lineUserId &&
-          normalizeYearMonth_(attData[j][3]) === yearMonth &&
-          (attData[j][9] || '') === site) {
-        trashDriveFile_(attData[j][6]); // [6] = DriveファイルID
+          normalizeYearMonth_(attData[j][4]) === yearMonth &&
+          (attData[j][3] || '') === site) {
+        trashDriveFile_(attData[j][7]); // [7] = DriveファイルID
         attSheet.deleteRow(j + 1);
       }
     }
@@ -115,17 +117,17 @@ function handleUploadReport(payload) {
     new Date(),                    // [0]  タイムスタンプ
     driver.lineUserId,             // [1]  LINEユーザーID
     driver.name,                   // [2]  ドライバー名
-    yearMonth,                     // [3]  年月
-    fileType,                      // [4]  ファイル種別
-    fileId,                        // [5]  DriveファイルID
-    fileUrl,                       // [6]  DriveURL
-    '未処理',                       // [7]  ステータス
-    '',                            // [8]  OCR実行日時
-    payload.consent ? '同意' : '', // [9]  同意
-    formatConsentAt_(payload.consentAt), // [10] 同意日時
-    '',                            // [11] 備考テキスト（OCR後に更新）
-    uploadId,                      // [12] アップロードID
-    site,                          // [13] 現場名
+    site,                          // [3]  現場名
+    yearMonth,                     // [4]  年月
+    fileType,                      // [5]  ファイル種別
+    fileId,                        // [6]  DriveファイルID
+    fileUrl,                       // [7]  DriveURL
+    '未処理',                       // [8]  ステータス
+    '',                            // [9]  OCR実行日時
+    payload.consent ? '同意' : '', // [10] 同意
+    formatConsentAt_(payload.consentAt), // [11] 同意日時
+    '',                            // [12] 備考テキスト（OCR後に更新）
+    uploadId,                      // [13] アップロードID
   ]);
 
   // OCR実行（失敗してもアップロード自体は成功扱い）
@@ -173,13 +175,13 @@ function handleUploadAttachment(payload) {
     new Date(),         // [0] タイムスタンプ
     driver.lineUserId,  // [1] LINEユーザーID
     driver.name,        // [2] ドライバー名
-    yearMonth,          // [3] 年月
-    payload.index || 0, // [4] インデックス
-    origName,           // [5] 元ファイル名
-    fileId,             // [6] DriveファイルID
-    fileUrl,            // [7] DriveURL
-    uploadId,           // [8] アップロードID
-    site,               // [9] 現場名
+    site,               // [3] 現場名
+    yearMonth,          // [4] 年月
+    payload.index || 0, // [5] インデックス
+    origName,           // [6] 元ファイル名
+    fileId,             // [7] DriveファイルID
+    fileUrl,            // [8] DriveURL
+    uploadId,           // [9] アップロードID
   ]);
 
   return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl });
@@ -275,16 +277,17 @@ function getReportsByUserId_(lineUserId) {
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
 
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [7]=fileUrl, [8]=status
   var reports = [];
   for (var i = 1; i < data.length; i++) {
     if (data[i][1] === lineUserId) {
       reports.push({
         timestamp: data[i][0] ? new Date(data[i][0]).toISOString() : '',
-        yearMonth: normalizeYearMonth_(data[i][3]),
-        fileType:  data[i][4],
-        fileUrl:   data[i][6],
-        status:    data[i][7],
-        site:      data[i][13] || '',
+        yearMonth: normalizeYearMonth_(data[i][4]),
+        fileType:  data[i][5],
+        fileUrl:   data[i][7],
+        status:    data[i][8],
+        site:      data[i][3] || '',
       });
     }
   }

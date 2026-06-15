@@ -181,11 +181,12 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploa
   var sheet = ss.getSheetByName(SHEET_OCR);
 
   // 同じ lineUserId + yearMonth + site の既存行を削除
+  // SHEET_OCR: [0]=uid, [2]=site, [3]=yearMonth
   var data = sheet.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
     if (data[i][0] === lineUserId &&
-        normalizeYearMonth_(data[i][2]) === yearMonth &&
-        (data[i][12] || '') === (site || '')) {
+        normalizeYearMonth_(data[i][3]) === yearMonth &&
+        (data[i][2] || '') === (site || '')) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -197,17 +198,17 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploa
     return [
       lineUserId,        // [0]  LINEユーザーID
       driverName,        // [1]  ドライバー名
-      yearMonth,         // [2]  年月
-      d.day,             // [3]  日
-      d.start || '',     // [4]  開始時間
-      d.end   || '',     // [5]  終了時間
-      hasStartTime,      // [6]  稼働フラグ
-      '未確認',           // [7]  確認ステータス
-      '',                // [8]  修正後開始時間
-      '',                // [9]  修正後終了時間
-      fileId,            // [10] 受信ファイルID
-      uploadId || '',    // [11] アップロードID
-      site || '',        // [12] 現場名
+      site || '',        // [2]  現場名
+      yearMonth,         // [3]  年月
+      d.day,             // [4]  日
+      d.start || '',     // [5]  開始時間
+      d.end   || '',     // [6]  終了時間
+      hasStartTime,      // [7]  稼働フラグ
+      '未確認',           // [8]  確認ステータス
+      '',                // [9]  修正後開始時間
+      '',                // [10] 修正後終了時間
+      fileId,            // [11] 受信ファイルID
+      uploadId || '',    // [12] アップロードID
     ];
   });
 
@@ -220,11 +221,12 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, u
   if (!sheet) return;
 
   // 同じ lineUserId + yearMonth + site の既存立替行を削除
+  // SHEET_EXPENSE: [0]=uid, [2]=site, [3]=yearMonth
   var data = sheet.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
     if (data[i][0] === lineUserId &&
-        normalizeYearMonth_(data[i][2]) === yearMonth &&
-        (data[i][9] || '') === (site || '')) {
+        normalizeYearMonth_(data[i][3]) === yearMonth &&
+        (data[i][2] || '') === (site || '')) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -233,14 +235,14 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, u
     return [
       lineUserId,           // [0] LINEユーザーID
       driverName,           // [1] ドライバー名
-      yearMonth,            // [2] 年月
-      idx + 1,              // [3] 行番号
-      exp.category || '',   // [4] 区分
-      exp.amount   !== null && exp.amount !== undefined ? exp.amount : '', // [5] 金額
-      exp.note     || '',   // [6] 内容
-      fileId,               // [7] 受信ファイルID
-      uploadId || '',       // [8] アップロードID
-      site || '',           // [9] 現場名
+      site || '',           // [2] 現場名
+      yearMonth,            // [3] 年月
+      idx + 1,              // [4] 行番号
+      exp.category || '',   // [5] 区分
+      exp.amount   !== null && exp.amount !== undefined ? exp.amount : '', // [6] 金額
+      exp.note     || '',   // [7] 内容
+      fileId,               // [8] 受信ファイルID
+      uploadId || '',       // [9] アップロードID
     ];
   });
 
@@ -249,14 +251,15 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, u
   }
 }
 
+// SHEET_RECEIVED: [6]=fileId, [8]=status(col9), [9]=ocrTime(col10), [12]=noteText(col13)
 function updateReceivedFileStatus_(fileId, status) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
-    if (data[i][5] === fileId) {
-      sheet.getRange(i + 1, 8).setValue(status);
+    if (data[i][6] === fileId) {
+      sheet.getRange(i + 1, 9).setValue(status); // [8]=status → col 9
       return;
     }
   }
@@ -267,8 +270,8 @@ function updateReceivedNoteText_(fileId, noteText) {
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (data[i][5] === fileId) {
-      sheet.getRange(i + 1, 12).setValue(noteText); // 列[11] = 備考テキスト
+    if (data[i][6] === fileId) {
+      sheet.getRange(i + 1, 13).setValue(noteText); // [12]=備考テキスト → col 13
       return;
     }
   }
@@ -280,8 +283,8 @@ function updateReceivedOcrTime_(fileId) {
   var data  = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
-    if (data[i][5] === fileId) {
-      sheet.getRange(i + 1, 9).setValue(new Date());
+    if (data[i][6] === fileId) {
+      sheet.getRange(i + 1, 10).setValue(new Date()); // [9]=ocrTime → col 10
       return;
     }
   }

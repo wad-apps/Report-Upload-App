@@ -28,13 +28,14 @@ function handleAdminGetOverview_(payload) {
   var ss        = SpreadsheetApp.openById(SHEET_ID);
   var data      = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
 
+  // SHEET_RECEIVED: [4]=yearMonth, [8]=status
   var stats = { total: 0, pending: 0, confirmed: 0, ocrError: 0 };
   data.slice(1).forEach(function(row) {
-    if (normalizeYearMonth_(row[3]) !== yearMonth) return;
+    if (normalizeYearMonth_(row[4]) !== yearMonth) return;
     stats.total++;
-    if      (row[7] === '確認待ち')  stats.pending++;
-    else if (row[7] === '確定')      stats.confirmed++;
-    else if (row[7] === 'OCRエラー') stats.ocrError++;
+    if      (row[8] === '確認待ち')  stats.pending++;
+    else if (row[8] === '確定')      stats.confirmed++;
+    else if (row[8] === 'OCRエラー') stats.ocrError++;
   });
 
   return jsonResponse({ stats: stats, yearMonth: yearMonth });
@@ -62,11 +63,12 @@ function handleAdminGetDriverList_(payload) {
   });
 
   // 対象年月の受信ファイルをドライバー×現場ごとに集約（最新1件）
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [7]=fileUrl, [8]=status, [9]=ocrTime
   var submissionMap = {};
   recvData.slice(1).forEach(function(row) {
-    if (normalizeYearMonth_(row[3]) !== yearMonth) return;
+    if (normalizeYearMonth_(row[4]) !== yearMonth) return;
     var uid  = row[1];
-    var site = row[13] || '';
+    var site = row[3] || '';
     var key  = uid + '|' + site;
     var ts   = row[0] ? new Date(row[0]).getTime() : 0;
     if (!submissionMap[key] || ts > submissionMap[key].ts) {
@@ -74,32 +76,32 @@ function handleAdminGetDriverList_(payload) {
         ts:        ts,
         uid:       uid,
         site:      site,
-        fileUrl:   row[6],
-        fileType:  row[4],
-        status:    row[7],
-        ocrTime:   row[8] ? Utilities.formatDate(new Date(row[8]), 'Asia/Tokyo', 'MM/dd HH:mm') : '',
+        fileUrl:   row[7],
+        fileType:  row[5],
+        status:    row[8],
+        ocrTime:   row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'MM/dd HH:mm') : '',
       };
     }
   });
 
-  // 稼働日数（修正後を優先）。SHEET_OCR [12] = 現場名
+  // 稼働日数（修正後を優先）。SHEET_OCR: [2]=site, [3]=yearMonth, [5]=start, [9]=fixedStart
   var workingDaysMap = {};
   ocrData.slice(1).forEach(function(row) {
-    if (normalizeYearMonth_(row[2]) !== yearMonth) return;
+    if (normalizeYearMonth_(row[3]) !== yearMonth) return;
     var uid      = row[0];
-    var site     = row[12] || '';
+    var site     = row[2] || '';
     var key      = uid + '|' + site;
-    var startVal = row[8] || row[4];
+    var startVal = row[9] || row[5]; // 修正後開始時間 or OCR開始時間
     var isWorking = startVal !== '' && startVal !== null;
     if (isWorking) workingDaysMap[key] = (workingDaysMap[key] || 0) + 1;
   });
 
-  // 月次確定データ。SHEET_MONTHLY [9] = 現場名
+  // 月次確定データ。SHEET_MONTHLY: [2]=site, [3]=yearMonth, [8]=billingAmount
   var confirmedMap = {};
   monthlyData.slice(1).forEach(function(row) {
-    if (normalizeYearMonth_(row[2]) === yearMonth) {
-      var site = row[9] || '';
-      confirmedMap[row[0] + '|' + site] = { billingAmount: row[7] };
+    if (normalizeYearMonth_(row[3]) === yearMonth) {
+      var site = row[2] || '';
+      confirmedMap[row[0] + '|' + site] = { billingAmount: row[8] };
     }
   });
 
@@ -139,60 +141,60 @@ function handleAdminGetOcrDetail_(payload) {
   var site       = payload.site || '';
   var ss         = SpreadsheetApp.openById(SHEET_ID);
 
-  // SHEET_OCR [12] = 現場名
+  // SHEET_OCR: [0]=uid, [2]=site, [3]=yearMonth, [4]=day, [5]=start, [6]=end, [7]=isWorking, [8]=status, [9]=fixedStart, [10]=fixedEnd
   var ocrData = ss.getSheetByName(SHEET_OCR).getDataRange().getValues();
   var days = [];
   ocrData.slice(1).forEach(function(row) {
-    if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth || (row[12] || '') !== site) return;
+    if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) return;
     days.push({
-      day:        row[3],
-      start:      normalizeTime_(row[4]),
-      end:        normalizeTime_(row[5]),
-      isWorking:  row[6],
-      status:     row[7],
-      fixedStart: normalizeTime_(row[8]),
-      fixedEnd:   normalizeTime_(row[9]),
+      day:        row[4],
+      start:      normalizeTime_(row[5]),
+      end:        normalizeTime_(row[6]),
+      isWorking:  row[7],
+      status:     row[8],
+      fixedStart: normalizeTime_(row[9]),
+      fixedEnd:   normalizeTime_(row[10]),
     });
   });
   days.sort(function(a, b) { return a.day - b.day; });
 
-  // SHEET_RECEIVED [13] = 現場名
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [7]=fileUrl, [12]=noteText
   var recvData = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
   var fileUrl  = '';
   var noteText = '';
   recvData.slice(1).forEach(function(row) {
-    if (row[1] === lineUserId && normalizeYearMonth_(row[3]) === yearMonth && (row[13] || '') === site) {
-      fileUrl  = row[6];
-      noteText = row[11] || '';
+    if (row[1] === lineUserId && normalizeYearMonth_(row[4]) === yearMonth && (row[3] || '') === site) {
+      fileUrl  = row[7];
+      noteText = row[12] || '';
     }
   });
 
-  // 立替明細。SHEET_EXPENSE [9] = 現場名
+  // 立替明細。SHEET_EXPENSE: [0]=uid, [2]=site, [3]=yearMonth, [4]=row#, [5]=cat, [6]=amt, [7]=note
   var expenses = [];
   var expSheet = ss.getSheetByName(SHEET_EXPENSE);
   if (expSheet) {
     expSheet.getDataRange().getValues().slice(1).forEach(function(row) {
-      if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth || (row[9] || '') !== site) return;
+      if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) return;
       expenses.push({
-        row:      row[3],
-        category: row[4],
-        amount:   row[5],
-        note:     row[6],
+        row:      row[4],
+        category: row[5],
+        amount:   row[6],
+        note:     row[7],
       });
     });
     expenses.sort(function(a, b) { return a.row - b.row; });
   }
 
-  // 添付ファイル。SHEET_ATTACHMENT [9] = 現場名
+  // 添付ファイル。SHEET_ATTACHMENT: [1]=uid, [3]=site, [4]=yearMonth, [5]=index, [6]=fileName, [8]=fileUrl
   var attachments = [];
   var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);
   if (attSheet) {
     attSheet.getDataRange().getValues().slice(1).forEach(function(row) {
-      if (row[1] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[9] || '') !== site) return;
+      if (row[1] !== lineUserId || normalizeYearMonth_(row[4]) !== yearMonth || (row[3] || '') !== site) return;
       attachments.push({
-        index:    row[4],
-        fileName: row[5],
-        fileUrl:  row[7],
+        index:    row[5],
+        fileName: row[6],
+        fileUrl:  row[8],
       });
     });
     attachments.sort(function(a, b) { return a.index - b.index; });
@@ -226,16 +228,17 @@ function handleAdminSaveCorrection_(payload) {
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth || (row[12] || '') !== site) continue;
-    var c = corrMap[row[3]];
+    // SHEET_OCR: [2]=site, [3]=yearMonth, [4]=day, [5]=ocrStart, [6]=ocrEnd, [7]=isWorking(col8), [8]=status(col9), [9]=fixedStart(col10), [10]=fixedEnd(col11)
+    if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) continue;
+    var c = corrMap[row[4]];
     if (!c) continue;
-    var ocrStart  = normalizeTime_(row[4]);
-    var ocrEnd    = normalizeTime_(row[5]);
+    var ocrStart  = normalizeTime_(row[5]);
+    var ocrEnd    = normalizeTime_(row[6]);
     var isWorking = c.fixedStart !== '';
-    sheet.getRange(i + 1, 7).setValue(isWorking);
-    sheet.getRange(i + 1, 8).setValue('修正済み');
-    sheet.getRange(i + 1, 9).setValue(c.fixedStart !== ocrStart ? c.fixedStart : '');
-    sheet.getRange(i + 1, 10).setValue(c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '');
+    sheet.getRange(i + 1, 8).setValue(isWorking);
+    sheet.getRange(i + 1, 9).setValue('修正済み');
+    sheet.getRange(i + 1, 10).setValue(c.fixedStart !== ocrStart ? c.fixedStart : '');
+    sheet.getRange(i + 1, 11).setValue(c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '');
   }
 
   SpreadsheetApp.flush();
@@ -254,13 +257,13 @@ function handleAdminConfirmMonth_(payload) {
   var ss      = SpreadsheetApp.openById(SHEET_ID);
   var ocrData = ss.getSheetByName(SHEET_OCR).getDataRange().getValues();
 
-  // SHEET_OCR [12] = 現場名でフィルタ
+  // SHEET_OCR: [2]=site, [3]=yearMonth, [5]=ocrStart, [6]=ocrEnd, [9]=fixedStart, [10]=fixedEnd
   var workingDays  = 0;
   var totalMinutes = 0;
   ocrData.slice(1).forEach(function(row) {
-    if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth || (row[12] || '') !== site) return;
-    var startStr = normalizeTime_(row[8]) || normalizeTime_(row[4]);
-    var endStr   = normalizeTime_(row[9]) || normalizeTime_(row[5]);
+    if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) return;
+    var startStr = normalizeTime_(row[9]) || normalizeTime_(row[5]);
+    var endStr   = normalizeTime_(row[10]) || normalizeTime_(row[6]);
     if (!startStr) return;
     workingDays++;
     var s = timeToMinutes_(startStr);
@@ -270,18 +273,18 @@ function handleAdminConfirmMonth_(payload) {
 
   var billingAmount = workingDays * (driver.unitPrice || 0);
 
-  // 月次確定シートへ書き込み（既存行は上書き）。SHEET_MONTHLY [9] = 現場名
+  // 月次確定シートへ書き込み（既存行は上書き）。SHEET_MONTHLY: [2]=site, [3]=yearMonth
   var monthSheet = ss.getSheetByName(SHEET_MONTHLY);
   var monthData  = monthSheet.getDataRange().getValues();
   var targetRow  = -1;
   for (var i = 1; i < monthData.length; i++) {
-    if (monthData[i][0] === lineUserId && normalizeYearMonth_(monthData[i][2]) === yearMonth && (monthData[i][9] || '') === site) {
+    if (monthData[i][0] === lineUserId && normalizeYearMonth_(monthData[i][3]) === yearMonth && (monthData[i][2] || '') === site) {
       targetRow = i + 1; break;
     }
   }
   var rowValues = [
-    lineUserId, driver.name, yearMonth, workingDays,
-    totalMinutes, 0, driver.unitPrice, billingAmount, new Date(), site
+    lineUserId, driver.name, site, yearMonth, workingDays,
+    totalMinutes, 0, driver.unitPrice, billingAmount, new Date()
   ];
   if (targetRow > 0) {
     monthSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
@@ -289,12 +292,12 @@ function handleAdminConfirmMonth_(payload) {
     monthSheet.appendRow(rowValues);
   }
 
-  // 受信ファイルのステータスを「確定」に更新（SHEET_RECEIVED [13] = 現場名）
+  // 受信ファイルのステータスを「確定」に更新（SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [8]=status col9）
   var recvSheet = ss.getSheetByName(SHEET_RECEIVED);
   var recvData  = recvSheet.getDataRange().getValues();
   for (var j = 1; j < recvData.length; j++) {
-    if (recvData[j][1] === lineUserId && normalizeYearMonth_(recvData[j][3]) === yearMonth && (recvData[j][13] || '') === site) {
-      recvSheet.getRange(j + 1, 8).setValue('確定');
+    if (recvData[j][1] === lineUserId && normalizeYearMonth_(recvData[j][4]) === yearMonth && (recvData[j][3] || '') === site) {
+      recvSheet.getRange(j + 1, 9).setValue('確定');
     }
   }
 
@@ -307,25 +310,20 @@ function handleAdminExportData_(payload) {
   var yearMonth   = payload.yearMonth;
   var ss          = SpreadsheetApp.openById(SHEET_ID);
   var monthlyData = ss.getSheetByName(SHEET_MONTHLY).getDataRange().getValues();
-  var driverData  = ss.getSheetByName(SHEET_DRIVER).getDataRange().getValues();
 
-  var driverMap = {};
-  driverData.slice(1).forEach(function(row) {
-    if (row[0]) driverMap[row[0]] = { site: row[2] };
-  });
-
+  // SHEET_MONTHLY: [1]=name, [2]=site, [3]=yearMonth, [4]=workingDays, [5]=totalMin, [7]=unitPrice, [8]=billingAmount, [9]=confirmedAt
   var rows = monthlyData.slice(1)
-    .filter(function(row) { return normalizeYearMonth_(row[2]) === yearMonth; })
+    .filter(function(row) { return normalizeYearMonth_(row[3]) === yearMonth; })
     .map(function(row) {
       return {
         driverName:    row[1],
-        site:          (driverMap[row[0]] || {}).site || '',
-        yearMonth:     row[2],
-        workingDays:   row[3],
-        totalHours:    row[4] ? Math.round(row[4] / 60 * 10) / 10 : 0,
-        unitPrice:     row[6],
-        billingAmount: row[7],
-        confirmedAt:   row[8] ? Utilities.formatDate(new Date(row[8]), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : '',
+        site:          row[2] || '',
+        yearMonth:     row[3],
+        workingDays:   row[4],
+        totalHours:    row[5] ? Math.round(row[5] / 60 * 10) / 10 : 0,
+        unitPrice:     row[7],
+        billingAmount: row[8],
+        confirmedAt:   row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : '',
       };
     });
 
