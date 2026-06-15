@@ -1,7 +1,7 @@
 // ===== 設定（後で実際の値に差し替え） =====
 var LIFF_ID        = '2010213495-32sSJXPi';
 var GAS_URL        = 'https://script.google.com/macros/s/AKfycbxhBY8vJ74CzghhEfnZi1QitH1U0qeOFfQ-aEG8Z9bfIchXqHLDBF3BEmFEKdSma3dJTw/exec';
-var TAG_REDIRECT_URL = ''; // 流入URL確定後にここに設定する
+var TAG_REDIRECT_URL = 'https://www.google.com'; // 動作検証用ダミー。流入URL確定後に差し替える
 
 // ===== 状態 =====
 var state = {
