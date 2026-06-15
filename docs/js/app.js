@@ -22,8 +22,24 @@ document.addEventListener('DOMContentLoaded', function() {
 function initApp() {
   var now  = new Date();
   var yyyy = now.getFullYear();
-  var mm   = String(now.getMonth() + 1).padStart(2, '0');
-  document.getElementById('input-yearmonth').value = yyyy + '-' + mm;
+  var mm   = now.getMonth() + 1;
+
+  var yearEl = document.getElementById('select-year');
+  for (var y = yyyy - 1; y <= yyyy + 1; y++) {
+    var yOpt = document.createElement('option');
+    yOpt.value = String(y);
+    yOpt.textContent = y + '年';
+    if (y === yyyy) yOpt.selected = true;
+    yearEl.appendChild(yOpt);
+  }
+  var monthEl = document.getElementById('select-month');
+  for (var m = 1; m <= 12; m++) {
+    var mOpt = document.createElement('option');
+    mOpt.value = String(m).padStart(2, '0');
+    mOpt.textContent = m + '月';
+    if (m === mm) mOpt.selected = true;
+    monthEl.appendChild(mOpt);
+  }
 
   liff.init({ liffId: LIFF_ID })
     .then(function() {
@@ -267,8 +283,12 @@ function updateSubmitEnabled() {
 
 // ===== 送信 =====
 
+function getSelectedYearMonth() {
+  return document.getElementById('select-year').value + '-' + document.getElementById('select-month').value;
+}
+
 function handleSubmit() {
-  var yearMonth = document.getElementById('input-yearmonth').value;
+  var yearMonth = getSelectedYearMonth();
   if (!yearMonth)          { showToast('対象年月を選択してください'); return; }
   if (!state.selectedFile) { showToast('ファイルを選択してください'); return; }
   if (!state.lineUserId)   { showToast('ログインし直してください'); return; }

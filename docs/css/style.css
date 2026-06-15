@@ -83,23 +83,25 @@ body {
   margin-bottom: 12px;
 }
 
-/* ===== 年月入力 ===== */
-.input-month {
-  display: block;
-  width: 100%;
-  max-width: 100%;
+/* ===== 年月選択 ===== */
+.select-yearmonth {
+  display: flex;
+  gap: 8px;
+}
+.select-ym {
+  flex: 1;
+  min-width: 0;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
   font-size: 16px;
-  padding: 10px 12px;
+  padding: 10px 8px;
   outline: none;
   box-sizing: border-box;
-  -webkit-appearance: none;
-  appearance: none;
+  cursor: pointer;
 }
-.input-month:focus { border-color: var(--accent); }
+.select-ym:focus { border-color: var(--accent); }
 
 /* ===== アップロードエリア ===== */
 .upload-area {
