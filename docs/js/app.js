@@ -1,6 +1,7 @@
 // ===== 設定（後で実際の値に差し替え） =====
-var LIFF_ID = '2010213495-32sSJXPi';
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbxhBY8vJ74CzghhEfnZi1QitH1U0qeOFfQ-aEG8Z9bfIchXqHLDBF3BEmFEKdSma3dJTw/exec';
+var LIFF_ID        = '2010213495-32sSJXPi';
+var GAS_URL        = 'https://script.google.com/macros/s/AKfycbxhBY8vJ74CzghhEfnZi1QitH1U0qeOFfQ-aEG8Z9bfIchXqHLDBF3BEmFEKdSma3dJTw/exec';
+var TAG_REDIRECT_URL = ''; // 流入URL確定後にここに設定する
 
 // ===== 状態 =====
 var state = {
@@ -56,19 +57,25 @@ function initApp() {
 function uploadReport(yearMonth, file) {
   var isPdf = file.type === 'application/pdf';
 
+  var consentPayload = {
+    consent:      true,
+    consentAt:    new Date().toISOString(),
+    agreedItems:  ['1', '2', '3', '4', '5', 'bill'],
+  };
+
   if (isPdf) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
       reader.onload = function(e) {
         var base64 = e.target.result.split(',')[1];
-        gasPost({
+        gasPost(Object.assign({
           action:     'uploadReport',
           lineUserId: state.lineUserId,
           yearMonth:  yearMonth,
           mimeType:   'application/pdf',
           fileBase64: base64,
           fileName:   file.name,
-        }).then(resolve).catch(reject);
+        }, consentPayload)).then(resolve).catch(reject);
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
@@ -77,16 +84,16 @@ function uploadReport(yearMonth, file) {
 
   // 画像: 向きに応じて分割してから送信（縦長→上下、横長→左右）
   return splitForOcr(file).then(function(halves) {
-    return gasPost({
-      action:          'uploadReport',
-      lineUserId:      state.lineUserId,
-      yearMonth:       yearMonth,
-      mimeType:        'image/jpeg',
-      fileBase64:      halves.full,
-      fileBase64First: halves.first,
-      fileBase64Second:halves.second,
-      fileName:        file.name,
-    });
+    return gasPost(Object.assign({
+      action:           'uploadReport',
+      lineUserId:       state.lineUserId,
+      yearMonth:        yearMonth,
+      mimeType:         'image/jpeg',
+      fileBase64:       halves.full,
+      fileBase64First:  halves.first,
+      fileBase64Second: halves.second,
+      fileName:         file.name,
+    }, consentPayload));
   });
 }
 
@@ -181,11 +188,21 @@ function setupEventListeners() {
 
   document.getElementById('btn-cancel-file').addEventListener('click', clearFileSelection);
   document.getElementById('btn-submit').addEventListener('click', handleSubmit);
-  document.getElementById('btn-back').addEventListener('click', function() {
-    showScreen('main');
-    gasPost({ action: 'getMyReports', lineUserId: state.lineUserId })
-      .then(function(res) { renderReportList(res.reports || []); })
-      .catch(function() {});
+
+  document.querySelectorAll('.submit-check').forEach(function(cb) {
+    cb.addEventListener('change', updateSubmitEnabled);
+  });
+
+  document.getElementById('btn-to-line').addEventListener('click', function() {
+    if (TAG_REDIRECT_URL) {
+      liff.openWindow({ url: TAG_REDIRECT_URL, external: false });
+    } else {
+      // 流入URL未設定時はメイン画面に戻る
+      showScreen('main');
+      gasPost({ action: 'getMyReports', lineUserId: state.lineUserId })
+        .then(function(res) { renderReportList(res.reports || []); })
+        .catch(function() {});
+    }
   });
 }
 
@@ -207,7 +224,7 @@ function handleFileSelected(file) {
     img.classList.add('hidden');
   }
 
-  document.getElementById('btn-submit').disabled = false;
+  updateSubmitEnabled();
 }
 
 function clearFileSelection() {
@@ -217,7 +234,16 @@ function clearFileSelection() {
   document.getElementById('upload-area').classList.remove('hidden');
   document.getElementById('preview-area').classList.add('hidden');
   document.getElementById('preview-image').classList.add('hidden');
-  document.getElementById('btn-submit').disabled = true;
+  updateSubmitEnabled();
+}
+
+function updateSubmitEnabled() {
+  var hasFile    = !!state.selectedFile;
+  var allChecked = Array.prototype.every.call(
+    document.querySelectorAll('.submit-check'),
+    function(c) { return c.checked; }
+  );
+  document.getElementById('btn-submit').disabled = !(hasFile && allChecked);
 }
 
 // ===== 送信 =====

@@ -95,6 +95,9 @@
 
         <!-- 日別データテーブル -->
         <section class="ocr-table-section">
+          <div id="mismatch-banner" class="mismatch-banner hidden">
+            要確認：稼働と開始時間の不一致 <span id="mismatch-count">0</span>件
+          </div>
           <div class="ocr-summary" id="ocr-summary">
             <span>単価: <strong id="ocr-unit-price">-</strong></span>
             <span>稼働日数: <strong id="ocr-working-days">-</strong> 日</span>
@@ -109,9 +112,33 @@
                   <th>開始時間</th>
                   <th>終了時間</th>
                   <th>稼働</th>
+                  <th>突合</th>
                 </tr>
               </thead>
               <tbody id="ocr-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 立替明細セクション -->
+        <section class="ocr-table-section expense-section">
+          <div class="table-header">
+            <h3 class="expense-title">立替明細</h3>
+          </div>
+          <div class="table-wrap">
+            <table id="expense-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>区分</th>
+                  <th>金額</th>
+                  <th>内容</th>
+                  <th>確認</th>
+                </tr>
+              </thead>
+              <tbody id="expense-tbody">
+                <tr><td colspan="5" class="empty-cell">立替なし</td></tr>
+              </tbody>
             </table>
           </div>
         </section>

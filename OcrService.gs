@@ -4,17 +4,30 @@
 var CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 var CLAUDE_MODEL   = 'claude-sonnet-4-6';
 
-var OCR_PROMPT_BASE = [
+var OCR_PROMPT_DAYS = [
   'これはドライバーの月次稼働報告書の画像です。',
-  '日付ごとの「開始時間」と「終了時間」を読み取り、以下のJSON形式のみで返してください。',
+  '日付ごとに「開始時間」「終了時間」と「稼働」マスの塗りつぶし有無を読み取り、',
+  '次のJSON形式のみで返してください。',
   '',
-  '{"hasNote":false,"days":[{"day":1,"start":"08:00","end":"17:30"},{"day":2,"start":null,"end":null},...]}',
+  '{"days":[{"day":1,"start":"08:00","end":"17:30","worked":true}, ...]}',
   '',
-  '【ルール】',
-  '- day: 帳票に書かれた日付の数字をそのまま読む（1〜31の整数）',
-  '- start/end: HH:MM形式。開始時間が記入されていない日はnull',
-  '- hasNote: 備考・メモ・申し送り欄に何らか記載があればtrue、なければfalse',
-  '- 合計行・集計欄は無視する',
+  '- day: 帳票の日付の数字（1〜31の整数）',
+  '- start/end: HH:MM。記入なしはnull',
+  '- worked: 「稼働」列のマスが塗られていればtrue、なければfalse、判別不能はnull',
+  '- 合計行・集計欄・立替欄・備考欄は読まない',
+  '- JSONブロックのみを返し説明文は不要',
+].join('\n');
+
+var OCR_PROMPT_META = [
+  '下部の「立替経費」欄と「備考」欄だけを読み取り、次のJSON形式のみで返してください。',
+  '',
+  '{"expenses":[{"category":"高速代","amount":1200,"note":null}],"hasNote":false}',
+  '',
+  '- category: 塗られた区分（高速代／燃料代／駐車場／その他 のいずれか）',
+  '- amount: 金額の整数（円）。読めなければnull',
+  '- note: 区分が「その他」のときの内容。なければnull',
+  '- 区分も金額もない空行は配列に含めない',
+  '- hasNote: 備考欄に記載があればtrue',
   '- JSONブロックのみを返し説明文は不要',
 ].join('\n');
 
@@ -29,26 +42,39 @@ function runOcr(fileId, yearMonth, lineUserId, firstBase64, secondBase64, pdfBas
 
   try {
     var days;
-    var hasNote = false;
+    var hasNote  = false;
+    var expenses = [];
 
     if (pdfBase64) {
-      var raw    = callClaudeApi_(pdfBase64, 'application/pdf', OCR_PROMPT_BASE);
-      var result = parseOcrResult_(raw);
-      days    = result.days;
-      hasNote = result.hasNote;
+      // PDF: DAYS と META を同一PDFに対し2パスで読む
+      var daysRaw  = callClaudeApi_(pdfBase64, 'application/pdf', OCR_PROMPT_DAYS);
+      var metaRaw  = callClaudeApi_(pdfBase64, 'application/pdf', OCR_PROMPT_META);
+      var daysResult = parseDaysResult_(daysRaw);
+      var metaResult = parseMetaResult_(metaRaw);
+      days     = daysResult.days;
+      hasNote  = metaResult.hasNote;
+      expenses = metaResult.expenses;
     } else {
-      // 前半・後半に分けて送信（日付範囲は指定しない：モデルが実際の数字を読む）
-      var promptFirst  = OCR_PROMPT_BASE + '\n\n【補足】これは月報の前半部分の画像です。';
-      var promptSecond = OCR_PROMPT_BASE + '\n\n【補足】これは月報の後半部分の画像です。';
+      // 画像: 前半・後半で DAYS プロンプト（2回）、後半のみで META プロンプト（1回）
+      var promptFirst  = OCR_PROMPT_DAYS + '\n\n【補足】これは月報の前半部分の画像です。';
+      var promptSecond = OCR_PROMPT_DAYS + '\n\n【補足】これは月報の後半部分の画像です。';
       var firstRaw  = callClaudeApi_(firstBase64,  'image/jpeg', promptFirst);
       var secondRaw = callClaudeApi_(secondBase64, 'image/jpeg', promptSecond);
-      var firstResult  = parseOcrResult_(firstRaw);
-      var secondResult = parseOcrResult_(secondRaw);
-      days    = mergeHalves_(firstResult.days, secondResult.days);
-      hasNote = firstResult.hasNote || secondResult.hasNote;
+      var firstResult  = parseDaysResult_(firstRaw);
+      var secondResult = parseDaysResult_(secondRaw);
+      days = mergeHalves_(firstResult.days, secondResult.days);
+
+      // 立替・備考は後半画像に丸ごと収まるため後半からのみ読む
+      var metaRaw    = callClaudeApi_(secondBase64, 'image/jpeg', OCR_PROMPT_META);
+      var metaResult = parseMetaResult_(metaRaw);
+      hasNote  = metaResult.hasNote;
+      expenses = metaResult.expenses;
     }
 
     writeOcrResults_(lineUserId, driver.name, yearMonth, fileId, days, hasNote);
+    if (expenses.length > 0) {
+      saveExpenseRows_(lineUserId, driver.name, yearMonth, fileId, expenses);
+    }
     updateReceivedFileStatus_(fileId, '確認待ち');
     updateReceivedOcrTime_(fileId);
 
@@ -98,11 +124,25 @@ function callClaudeApi_(base64, mimeType, prompt) {
 
 // ===== パース・マージ =====
 
-function parseOcrResult_(text) {
+function parseDaysResult_(text) {
   var match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('OCRレスポンスからJSONを取得できませんでした: ' + text.substring(0, 200));
   var parsed = JSON.parse(match[0]);
-  return { days: parsed.days || [], hasNote: !!parsed.hasNote };
+  return { days: parsed.days || [] };
+}
+
+function parseMetaResult_(text) {
+  var match = text.match(/\{[\s\S]*\}/);
+  if (!match) return { expenses: [], hasNote: false };
+  try {
+    var parsed = JSON.parse(match[0]);
+    return {
+      expenses: parsed.expenses || [],
+      hasNote:  !!parsed.hasNote,
+    };
+  } catch (e) {
+    return { expenses: [], hasNote: false };
+  }
 }
 
 function mergeHalves_(leftDays, rightDays) {
@@ -145,24 +185,70 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, hasNo
 
   var noteVal = !!hasNote;
   var rows = days.map(function(d) {
+    var hasStartTime = d.start !== null && d.start !== undefined && d.start !== '';
+    var worked = d.worked; // true / false / null
+    var match;
+    if (worked === null || worked === undefined) {
+      match = '—';
+    } else if (worked === hasStartTime) {
+      match = '一致';
+    } else {
+      match = '不一致';
+    }
+    var workedVal = (worked === null || worked === undefined) ? '' : worked;
+
     return [
-      lineUserId,        // LINEユーザーID
-      driverName,        // ドライバー名
-      yearMonth,         // 年月
-      d.day,             // 日
-      d.start || '',     // 開始時間
-      d.end   || '',     // 終了時間
-      d.start !== null,  // 稼働フラグ
-      false,             // 立替経費フラグ（列は維持・未使用）
-      noteVal,           // 備考フラグ（月レベル、全行に同じ値）
-      '未確認',           // 確認ステータス
-      '',                // 修正後開始時間
-      '',                // 修正後終了時間
-      fileId             // 受信ファイルID
+      lineUserId,        // [0]  LINEユーザーID
+      driverName,        // [1]  ドライバー名
+      yearMonth,         // [2]  年月
+      d.day,             // [3]  日
+      d.start || '',     // [4]  開始時間
+      d.end   || '',     // [5]  終了時間
+      hasStartTime,      // [6]  稼働フラグ
+      false,             // [7]  立替経費フラグ（列維持・未使用）
+      noteVal,           // [8]  備考フラグ
+      '未確認',           // [9]  確認ステータス
+      '',                // [10] 修正後開始時間
+      '',                // [11] 修正後終了時間
+      fileId,            // [12] 受信ファイルID
+      workedVal,         // [13] 稼働マーク(OCR)
+      match,             // [14] 突合
     ];
   });
 
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses) {
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_EXPENSE);
+  if (!sheet) return;
+
+  // 同じ lineUserId + yearMonth の既存立替行を削除
+  var data = sheet.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] === lineUserId && data[i][2] === yearMonth) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+
+  var rows = expenses.map(function(exp, idx) {
+    return [
+      lineUserId,           // [0] LINEユーザーID
+      driverName,           // [1] ドライバー名
+      yearMonth,            // [2] 年月
+      idx + 1,              // [3] 行番号
+      exp.category || '',   // [4] 区分
+      exp.amount   !== null && exp.amount !== undefined ? exp.amount : '', // [5] 金額
+      exp.note     || '',   // [6] 内容
+      '未確認',              // [7] 確認ステータス
+      fileId,               // [8] 受信ファイルID
+    ];
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  }
 }
 
 function updateReceivedFileStatus_(fileId, status) {

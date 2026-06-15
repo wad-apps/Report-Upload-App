@@ -251,5 +251,38 @@ body {
 }
 .toast.hidden { display: none; }
 
+/* ===== チェックリスト ===== */
+.checklist-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 14px;
+}
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.checklist-item:last-child { border-bottom: none; }
+.checklist-item input[type="checkbox"] {
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.checklist-consent {
+  margin-top: 4px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ===== ユーティリティ ===== */
 .hidden { display: none !important; }

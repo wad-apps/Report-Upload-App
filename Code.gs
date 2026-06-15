@@ -6,6 +6,7 @@ var SHEET_RECEIVED = '月報受信ファイル';
 var SHEET_OCR      = 'OCR結果データ';
 var SHEET_DRIVER   = 'ドライバーマスタ';
 var SHEET_MONTHLY  = '月次確定';
+var SHEET_EXPENSE  = '立替明細';
 
 // ===== ルーティング =====
 
@@ -82,15 +83,17 @@ function handleUploadReport(payload) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   sheet.appendRow([
-    new Date(),
-    driver.lineUserId,
-    driver.name,
-    yearMonth,
-    fileType,
-    fileId,
-    fileUrl,
-    '未処理',
-    ''
+    new Date(),                              // [0] タイムスタンプ
+    driver.lineUserId,                       // [1] LINEユーザーID
+    driver.name,                             // [2] ドライバー名
+    yearMonth,                               // [3] 年月
+    fileType,                                // [4] ファイル種別
+    fileId,                                  // [5] DriveファイルID
+    fileUrl,                                 // [6] DriveURL
+    '未処理',                                 // [7] ステータス
+    '',                                      // [8] OCR実行日時
+    payload.consent ? '同意' : '',           // [9] 同意
+    payload.consentAt || '',                 // [10] 同意日時
   ]);
 
   // OCR実行（失敗してもアップロード自体は成功扱い）

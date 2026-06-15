@@ -159,7 +159,18 @@ function openOcrScreen(lineUserId, driverName) {
       fileLinkEl.classList.add('hidden');
     }
     document.getElementById('ocr-note-badge').classList.toggle('hidden', !res.hasNote);
+
+    var mismatch = (res.mismatchDays || []).length;
+    var banner   = document.getElementById('mismatch-banner');
+    if (mismatch > 0) {
+      document.getElementById('mismatch-count').textContent = mismatch;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+
     renderOcrTable(res.days, res.driver);
+    renderExpenses(res.expenses || []);
     showScreen('ocr');
   });
 }
@@ -169,20 +180,26 @@ function renderOcrTable(days, driver) {
   var tbody     = document.getElementById('ocr-tbody');
 
   tbody.innerHTML = days.map(function(d) {
-    var displayStart = d.fixedStart || d.start || '';
-    var displayEnd   = d.fixedEnd   || d.end   || '';
-    var isWorking    = displayStart !== '';
+    var displayStart  = d.fixedStart || d.start || '';
+    var displayEnd    = d.fixedEnd   || d.end   || '';
+    var isWorking     = displayStart !== '';
     var dotClass      = isWorking ? 'yes' : 'no';
     var startModified = d.fixedStart ? ' modified' : '';
     var endModified   = d.fixedEnd   ? ' modified' : '';
+    var isMismatch    = d.match === '不一致';
+    var rowClass      = isMismatch ? ' class="mismatch-row"' : '';
+    var matchCell     = isMismatch
+      ? '<span class="mismatch-badge">不一致</span>'
+      : escHtml(d.match || '');
     return [
-      '<tr>',
+      '<tr' + rowClass + '>',
       '<td style="font-weight:600;color:var(--text-sub)">' + d.day + '</td>',
       '<td><input type="text" class="time-input' + startModified + '" data-day="' + d.day + '" data-field="start"' +
           ' value="' + displayStart + '" placeholder="--:--"></td>',
       '<td><input type="text" class="time-input' + endModified   + '" data-day="' + d.day + '" data-field="end"' +
           ' value="' + displayEnd + '" placeholder="--:--"></td>',
       '<td><span class="working-dot ' + dotClass + '"></span></td>',
+      '<td>' + matchCell + '</td>',
       '</tr>',
     ].join('');
   }).join('');
@@ -215,6 +232,26 @@ function updateOcrSummary(unitPrice) {
   });
   document.getElementById('ocr-working-days').textContent = working;
   document.getElementById('ocr-billing').textContent = '¥' + (working * unitPrice).toLocaleString();
+}
+
+function renderExpenses(expenses) {
+  var tbody = document.getElementById('expense-tbody');
+  if (!expenses || expenses.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">立替なし</td></tr>';
+    return;
+  }
+  tbody.innerHTML = expenses.map(function(e) {
+    var amount = e.amount !== null && e.amount !== '' ? '¥' + Number(e.amount).toLocaleString() : '-';
+    return [
+      '<tr>',
+      '<td>' + escHtml(String(e.row)) + '</td>',
+      '<td>' + escHtml(e.category || '') + '</td>',
+      '<td>' + amount + '</td>',
+      '<td>' + escHtml(e.note || '') + '</td>',
+      '<td><span class="badge badge-' + escHtml(e.status || '') + '">' + escHtml(e.status || '') + '</span></td>',
+      '</tr>',
+    ].join('');
+  }).join('');
 }
 
 // ===== 修正保存 =====

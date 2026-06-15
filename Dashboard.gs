@@ -134,6 +134,8 @@ function handleAdminGetOcrDetail_(payload) {
       status:      row[9],
       fixedStart:  normalizeTime_(row[10]),
       fixedEnd:    normalizeTime_(row[11]),
+      workedMark:  row[13] === '' ? null : row[13],
+      match:       row[14] || '',
     });
   });
   days.sort(function(a, b) { return a.day - b.day; });
@@ -146,12 +148,33 @@ function handleAdminGetOcrDetail_(payload) {
 
   var hasNote = days.some(function(d) { return d.noteFlag === true || d.noteFlag === 'TRUE'; });
 
+  // 立替明細
+  var expenses = [];
+  var expSheet = ss.getSheetByName(SHEET_EXPENSE);
+  if (expSheet) {
+    expSheet.getDataRange().getValues().slice(1).forEach(function(row) {
+      if (row[0] !== lineUserId || normalizeYearMonth_(row[2]) !== yearMonth) return;
+      expenses.push({
+        row:      row[3],
+        category: row[4],
+        amount:   row[5],
+        note:     row[6],
+        status:   row[7],
+      });
+    });
+    expenses.sort(function(a, b) { return a.row - b.row; });
+  }
+
+  var mismatchDays = days.filter(function(d) { return d.match === '不一致'; }).map(function(d) { return d.day; });
+
   return jsonResponse({
-    days:      days,
-    fileUrl:   fileUrl,
-    driver:    getDriverByUserId(lineUserId) || {},
-    yearMonth: yearMonth,
-    hasNote:   hasNote,
+    days:         days,
+    fileUrl:      fileUrl,
+    driver:       getDriverByUserId(lineUserId) || {},
+    yearMonth:    yearMonth,
+    hasNote:      hasNote,
+    expenses:     expenses,
+    mismatchDays: mismatchDays,
   });
 }
 

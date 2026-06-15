@@ -48,6 +48,16 @@
         <button class="btn btn-cancel" id="btn-cancel-file">✕ 選択し直す</button>
       </section>
 
+      <section class="card checklist-section" id="checklist-section">
+        <p class="checklist-title">送信前に確認してください</p>
+        <label class="checklist-item"><input type="checkbox" class="submit-check" id="chk1"> 最終稼働日に提出する</label>
+        <label class="checklist-item"><input type="checkbox" class="submit-check" id="chk2"> 日付・稼働・開始/終了時間を記入した</label>
+        <label class="checklist-item"><input type="checkbox" class="submit-check" id="chk3"> 単価・稼働日数・請求合計金額を記入した</label>
+        <label class="checklist-item"><input type="checkbox" class="submit-check" id="chk4"> 残業・早出・距離超過・立替を記入した</label>
+        <label class="checklist-item"><input type="checkbox" class="submit-check" id="chk5"> 氏名・請求期間・現場名を確認した</label>
+        <label class="checklist-item checklist-consent"><input type="checkbox" class="submit-check" id="chk-bill"> この内容で請求することに同意する</label>
+      </section>
+
       <button class="btn btn-submit" id="btn-submit" disabled>この月報を送信する</button>
     </main>
 
@@ -74,7 +84,7 @@
       <div class="done-icon">✅</div>
       <h2>送信完了</h2>
       <p id="done-message"></p>
-      <button class="btn btn-primary" id="btn-back">戻る</button>
+      <button class="btn btn-primary" id="btn-to-line">LINEに戻る</button>
     </div>
   </div>
 
