@@ -1,5 +1,6 @@
-var GAS_URL        = 'https://script.google.com/macros/s/AKfycbxhBY8vJ74CzghhEfnZi1QitH1U0qeOFfQ-aEG8Z9bfIchXqHLDBF3BEmFEKdSma3dJTw/exec';
-var OAUTH_CLIENT_ID = '882266271532-67lvpq4lk25qgr9npdt4f1n0o07afuq1.apps.googleusercontent.com';
+// ===== 設定（docs/config.js で一元管理） =====
+var GAS_URL         = window.APP_CONFIG.GAS_URL;
+var OAUTH_CLIENT_ID = window.APP_CONFIG.OAUTH_CLIENT_ID;
 
 // ===== 状態 =====
 var state = {
