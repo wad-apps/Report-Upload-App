@@ -1,8 +1,8 @@
 // Claude API を使った月報OCRサービス
-// Script Properties に CLAUDE_API_KEY を設定しておくこと
+// Script Properties に CLAUDE_API_KEY・CLAUDE_MODEL を設定しておくこと
 
 var CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-var CLAUDE_MODEL   = 'claude-sonnet-4-6';
+var CLAUDE_MODEL   = PropertiesService.getScriptProperties().getProperty('CLAUDE_MODEL') || 'claude-sonnet-4-6';
 
 var OCR_PROMPT_DAYS = [
   'これはドライバーの月次稼働報告書の画像です。',
