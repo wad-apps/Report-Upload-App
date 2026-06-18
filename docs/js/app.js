@@ -267,7 +267,7 @@ function setupEventListeners() {
       currentTotal += files[i].size;
       state.attachmentFiles.push(files[i]);
     }
-    if (sizeOver)  showToast('サイズ超過のファイルはスキップされました（1件50MB・合計200MB上限）');
+    if (sizeOver)  showToast('追加できないファイルがありました。1件50MB・合計200MBが上限です。大きいファイルは写真アプリで圧縮してください。');
     else if (countOver) showToast('添付ファイルは最大10件です');
     renderAttachmentList();
     e.target.value = '';
@@ -293,7 +293,7 @@ function setupEventListeners() {
 
 function handleFileSelected(file) {
   if (file.size > MAX_FILE_BYTES) {
-    showToast('ファイルサイズが上限（50MB）を超えています');
+    showToast('ファイルが大きすぎます（' + formatBytes(file.size) + '）。\n写真アプリで画質を下げるか、別の写真に変えてください。上限は50MBです。');
     return;
   }
   state.selectedFile     = file;
@@ -304,6 +304,10 @@ function handleFileSelected(file) {
   document.getElementById('upload-area').classList.add('hidden');
   document.getElementById('preview-area').classList.remove('hidden');
   document.getElementById('preview-filename').textContent = file.name;
+
+  var sizeEl = document.getElementById('preview-filesize');
+  sizeEl.textContent = formatBytes(file.size) + ' / 上限 50 MB';
+  sizeEl.className   = 'preview-filesize';
 
   var img = document.getElementById('preview-image');
   if (file.type.startsWith('image/')) {
@@ -332,6 +336,7 @@ function clearFileSelection() {
   document.getElementById('upload-area').classList.remove('hidden');
   document.getElementById('preview-area').classList.add('hidden');
   document.getElementById('preview-image').classList.add('hidden');
+  document.getElementById('preview-filesize').textContent = '';
   updateSubmitEnabled();
 }
 
@@ -355,7 +360,7 @@ function handleSubmit() {
 
   var totalBytes = state.selectedFile.size + state.attachmentFiles.reduce(function(sum, f) { return sum + f.size; }, 0);
   if (totalBytes > MAX_TOTAL_BYTES) {
-    showToast('ファイルの合計サイズが上限（200MB）を超えています');
+    showToast('合計 ' + formatBytes(totalBytes) + ' で上限（200 MB）を超えています。添付ファイルを減らしてから再送信してください。');
     return;
   }
 
@@ -480,16 +485,17 @@ function resizeImage(file) {
 // ===== 添付ファイル =====
 
 function renderAttachmentList() {
-  var list = document.getElementById('attachment-list');
+  var list    = document.getElementById('attachment-list');
+  var infoEl  = document.getElementById('attachment-size-info');
   if (state.attachmentFiles.length === 0) {
     list.innerHTML = '';
+    infoEl.classList.add('hidden');
     return;
   }
   list.innerHTML = state.attachmentFiles.map(function(file, i) {
-    var span = document.createElement('span');
-    span.textContent = file.name;
     return '<div class="attachment-item">' +
       '<span class="attachment-name">' + escHtml(file.name) + '</span>' +
+      '<span class="attachment-size">' + formatBytes(file.size) + '</span>' +
       '<button class="btn-remove-attachment" data-index="' + i + '">✕</button>' +
       '</div>';
   }).join('');
@@ -499,6 +505,11 @@ function renderAttachmentList() {
       renderAttachmentList();
     });
   });
+  var total   = state.attachmentFiles.reduce(function(sum, f) { return sum + f.size; }, 0);
+  var isOver  = total > MAX_TOTAL_BYTES;
+  infoEl.textContent = '合計 ' + formatBytes(total) + ' / 上限 200 MB';
+  infoEl.className   = 'attachment-size-info' + (isOver ? ' warn' : '');
+  infoEl.classList.remove('hidden');
 }
 
 function escHtml(str) {
@@ -507,6 +518,11 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return Math.round(bytes / 1024) + ' KB';
 }
 
 // ===== 提出履歴 =====

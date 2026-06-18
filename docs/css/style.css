@@ -146,9 +146,15 @@ body {
 .preview-filename {
   font-size: 14px;
   color: var(--text-sub);
-  margin-bottom: 12px;
+  margin-bottom: 4px;
   word-break: break-all;
 }
+.preview-filesize {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-bottom: 12px;
+}
+.preview-filesize.warn { color: var(--danger); font-weight: 600; }
 
 /* ===== ボタン ===== */
 .btn {
@@ -320,6 +326,18 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.attachment-size {
+  font-size: 12px;
+  color: var(--text-sub);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.attachment-size-info {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin: 4px 0 8px;
+}
+.attachment-size-info.warn { color: var(--danger); font-weight: 600; }
 .btn-remove-attachment {
   background: none;
   border: none;
