@@ -6,9 +6,10 @@ var SHEET_RECEIVED = '月報受信ファイル';
 var SHEET_OCR      = 'OCR結果データ';
 var SHEET_DRIVER   = 'ドライバーマスタ';
 var SHEET_MONTHLY  = '月次確定';
-var SHEET_EXPENSE     = '立替明細';
-var SHEET_ATTACHMENT  = '添付ファイル';
-var SHEET_LOG         = '操作ログ';
+var SHEET_EXPENSE      = '立替明細';
+var SHEET_ATTACHMENT   = '添付ファイル';
+var SHEET_LOG          = '操作ログ';
+var SHEET_UNREGISTERED = '未登録ドライバー';
 
 // ===== ルーティング =====
 
@@ -52,13 +53,32 @@ function doPost(e) {
 // 起動時に1回のリクエストでプロフィール＋提出履歴を返す
 function handleBootstrap(payload) {
   var drivers = getDriversByUserId_(payload.lineUserId);
-  if (!drivers.length) return jsonResponse({ error: 'unauthorized' });
+  if (!drivers.length) {
+    saveUnregisteredDriver_(payload.lineUserId, payload.displayName || '');
+    return jsonResponse({ error: 'unauthorized' });
+  }
 
   var reports = getReportsByUserId_(drivers[0].lineUserId);
   return jsonResponse({
     drivers: drivers,
     reports: reports,
   });
+}
+
+function saveUnregisteredDriver_(lineUserId, displayName) {
+  if (!lineUserId) return;
+  try {
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_UNREGISTERED);
+    if (!sheet) {
+      sheet = ss.insertSheet(SHEET_UNREGISTERED);
+      sheet.getRange(1, 1, 1, 3).setValues([['タイムスタンプ', 'LINEユーザーID', '表示名']]);
+      sheet.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
+    }
+    sheet.appendRow([new Date(), lineUserId, displayName]);
+  } catch (e) {
+    Logger.log('saveUnregisteredDriver_ error: ' + e.message);
+  }
 }
 
 function handleGetProfile(payload) {

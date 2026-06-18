@@ -48,6 +48,11 @@ function setupSheets() {
       name: SHEET_LOG,
       // [0]timestamp [1]email [2]action [3]uid [4]name [5]yearMonth [6]before [7]after [8]note
       headers: ['日時', '操作者メール', '操作種別', 'LINEユーザーID', 'ドライバー名', '年月', '変更前', '変更後', '補足']
+    },
+    {
+      name: SHEET_UNREGISTERED,
+      // [0]timestamp [1]uid [2]displayName
+      headers: ['タイムスタンプ', 'LINEユーザーID', '表示名']
     }
   ];
 

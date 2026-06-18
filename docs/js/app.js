@@ -40,7 +40,7 @@ function initApp() {
       state.lineUserId  = profile.userId;
       state.displayName = profile.displayName;
       // プロフィール＋履歴を1回のAPIで取得
-      return gasPost({ action: 'bootstrap', lineUserId: profile.userId });
+      return gasPost({ action: 'bootstrap', lineUserId: profile.userId, displayName: profile.displayName });
     })
     .then(function(res) {
       // drivers 配列（新形式）と driver 単体（旧形式）の両方に対応
