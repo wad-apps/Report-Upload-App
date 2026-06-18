@@ -27,7 +27,7 @@ function setupSheets() {
     },
     {
       name: SHEET_DRIVER,
-      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '単価(税別)', '基準拘束時間(分)', '休憩時間(分)']
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '単価(税別)', '基準拘束時間(分)', '休憩時間(分)', '稼働状態']
     },
     {
       name: SHEET_MONTHLY,

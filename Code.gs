@@ -41,7 +41,9 @@ function doPost(e) {
       case 'adminExportData':
       case 'adminGetDriverMaster':
       case 'adminSaveDriver':
+      case 'adminSetDriverStatus':
       case 'adminDeleteDriver':
+      case 'adminDeleteUnregistered':
         return handleAdminPost(payload);
       default:
         return jsonResponse({ error: 'invalid action' });
@@ -70,6 +72,8 @@ function handleBootstrap(payload) {
 
 function saveUnregisteredDriver_(lineUserId, displayName) {
   if (!lineUserId) return;
+  // マスタに既存（停止含む全状態）なら未登録には記録しない
+  if (driverExistsInMaster_(lineUserId)) return;
   try {
     var ss    = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName(SHEET_UNREGISTERED);
@@ -78,10 +82,29 @@ function saveUnregisteredDriver_(lineUserId, displayName) {
       sheet.getRange(1, 1, 1, 3).setValues([['タイムスタンプ', 'LINEユーザーID', '表示名']]);
       sheet.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
     }
+    // 同一UIDが既にあればタイムスタンプ・表示名を上書き（重複蓄積を防ぐ）
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][1] === lineUserId) {
+        sheet.getRange(i + 1, 1, 1, 3).setValues([[new Date(), lineUserId, displayName]]);
+        return;
+      }
+    }
     sheet.appendRow([new Date(), lineUserId, displayName]);
   } catch (e) {
     Logger.log('saveUnregisteredDriver_ error: ' + e.message);
   }
+}
+
+// マスタに当該UIDの行が1つでも存在するか（稼働/停止を問わない）
+function driverExistsInMaster_(userId) {
+  if (!userId) return false;
+  var ss   = SpreadsheetApp.openById(SHEET_ID);
+  var data = ss.getSheetByName(SHEET_DRIVER).getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === userId) return true;
+  }
+  return false;
 }
 
 function handleGetProfile(payload) {
@@ -230,20 +253,21 @@ function getDriverByUserId(userId) {
   var data  = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === userId) {
+    if (data[i][0] === userId && data[i][6] !== '停止') {
       return {
         lineUserId:      data[i][0],
         name:            data[i][1],
         site:            data[i][2],
         unitPrice:       data[i][3],
         baseWorkMinutes: data[i][4],
+        status:          data[i][6] || '稼働',
       };
     }
   }
   return null;
 }
 
-// userId の全現場分を配列で返す
+// userId の全現場分を配列で返す（稼働中のみ）
 function getDriversByUserId_(userId) {
   if (!userId) return [];
   var ss    = SpreadsheetApp.openById(SHEET_ID);
@@ -252,13 +276,14 @@ function getDriversByUserId_(userId) {
 
   var drivers = [];
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === userId) {
+    if (data[i][0] === userId && data[i][6] !== '停止') {
       drivers.push({
         lineUserId:      data[i][0],
         name:            data[i][1],
         site:            data[i][2],
         unitPrice:       data[i][3],
         baseWorkMinutes: data[i][4],
+        status:          data[i][6] || '稼働',
       });
     }
   }
@@ -274,7 +299,7 @@ function getDriverByUserIdAndSite_(userId, site) {
 
   var firstMatch = null;
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === userId) {
+    if (data[i][0] === userId && data[i][6] !== '停止') {
       if (!firstMatch) firstMatch = data[i];
       if ((data[i][2] || '') === (site || '')) {
         return {
@@ -283,6 +308,7 @@ function getDriverByUserIdAndSite_(userId, site) {
           site:            data[i][2],
           unitPrice:       data[i][3],
           baseWorkMinutes: data[i][4],
+          status:          data[i][6] || '稼働',
         };
       }
     }
@@ -295,6 +321,7 @@ function getDriverByUserIdAndSite_(userId, site) {
       site:            firstMatch[2],
       unitPrice:       firstMatch[3],
       baseWorkMinutes: firstMatch[4],
+      status:          firstMatch[6] || '稼働',
     };
   }
   return null;

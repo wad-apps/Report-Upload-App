@@ -474,13 +474,14 @@ function closeModal() {
 
 // ===== ドライバーマスタ管理 =====
 var _driverMasterIsNew = false; // モーダルの追加/編集モードフラグ
+var _driverEditOriginalSite = ''; // 編集時の元の現場名（重複行防止・修正1）
 
 function openDriverMasterScreen() {
   showScreen('driver-master');
   document.getElementById('unregistered-tbody').innerHTML =
     '<tr><td colspan="4" class="empty-cell">読み込み中...</td></tr>';
   document.getElementById('driver-master-tbody').innerHTML =
-    '<tr><td colspan="6" class="empty-cell">読み込み中...</td></tr>';
+    '<tr><td colspan="7" class="empty-cell">読み込み中...</td></tr>';
 
   adminPost({ action: 'adminGetDriverMaster', idToken: state.idToken })
     .then(function(res) {
@@ -503,9 +504,13 @@ function renderUnregisteredTable(rows) {
       '<td style="color:var(--text-sub);font-size:12px">' + escHtml(r.timestamp) + '</td>',
       '<td><strong>' + escHtml(r.displayName) + '</strong></td>',
       '<td style="font-size:12px;font-family:monospace">' + escHtml(r.lineUserId) + '</td>',
-      '<td><button class="btn btn-sm btn-outline btn-register-driver"' +
+      '<td style="display:flex;gap:6px">' +
+        '<button class="btn btn-sm btn-outline btn-register-driver"' +
           ' data-uid="' + escHtml(r.lineUserId) + '"' +
-          ' data-name="' + escHtml(r.displayName) + '">登録</button></td>',
+          ' data-name="' + escHtml(r.displayName) + '">登録</button>' +
+        '<button class="btn btn-sm btn-ghost btn-ignore-unreg"' +
+          ' data-uid="' + escHtml(r.lineUserId) + '">無視</button>' +
+      '</td>',
       '</tr>',
     ].join('');
   }).join('');
@@ -515,23 +520,43 @@ function renderUnregisteredTable(rows) {
       openDriverModal({ lineUserId: btn.dataset.uid, name: btn.dataset.name, site: '', unitPrice: 0, baseWorkMinutes: 0, breakMinutes: 0, _isFromUnregistered: true });
     });
   });
+
+  tbody.querySelectorAll('.btn-ignore-unreg').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (!confirm('この未登録ユーザーを一覧から削除しますか？')) return;
+      btn.disabled = true;
+      adminPost({ action: 'adminDeleteUnregistered', idToken: state.idToken, lineUserId: btn.dataset.uid })
+        .then(function() {
+          showToast('削除しました');
+          openDriverMasterScreen();
+        }).catch(function() {
+          showToast('削除に失敗しました');
+          btn.disabled = false;
+        });
+    });
+  });
 }
 
 function renderDriverMasterTable(drivers) {
   var tbody = document.getElementById('driver-master-tbody');
   if (!drivers.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">登録済みドライバーはいません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">登録済みドライバーはいません</td></tr>';
     return;
   }
   tbody.innerHTML = drivers.map(function(d) {
+    var stopped     = d.status === '停止';
+    var statusLabel = stopped ? '停止' : '稼働';
+    var toggleLabel = stopped ? '再開' : '停止';
+    var toggleNext  = stopped ? '稼働' : '停止';
     return [
-      '<tr>',
+      '<tr' + (stopped ? ' style="opacity:.55"' : '') + '>',
       '<td><strong>' + escHtml(d.name) + '</strong></td>',
       '<td>' + escHtml(d.site) + '</td>',
       '<td>¥' + Number(d.unitPrice || 0).toLocaleString() + '</td>',
       '<td>' + (d.baseWorkMinutes || 0) + '</td>',
       '<td>' + (d.breakMinutes || 0) + '</td>',
-      '<td style="display:flex;gap:6px">',
+      '<td><span class="badge badge-' + statusLabel + '">' + statusLabel + '</span></td>',
+      '<td style="display:flex;gap:6px;flex-wrap:wrap">',
       '<button class="btn btn-sm btn-outline btn-edit-driver"' +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
           ' data-name="' + escHtml(d.name) + '"' +
@@ -539,10 +564,15 @@ function renderDriverMasterTable(drivers) {
           ' data-unit="' + (d.unitPrice || 0) + '"' +
           ' data-base="' + (d.baseWorkMinutes || 0) + '"' +
           ' data-break="' + (d.breakMinutes || 0) + '">編集</button>',
+      '<button class="btn btn-sm btn-ghost btn-toggle-driver"' +
+          ' data-uid="' + escHtml(d.lineUserId) + '"' +
+          ' data-name="' + escHtml(d.name) + '"' +
+          ' data-site="' + escHtml(d.site) + '"' +
+          ' data-next="' + toggleNext + '">' + toggleLabel + '</button>',
       '<button class="btn btn-sm btn-ghost btn-delete-driver"' +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
           ' data-name="' + escHtml(d.name) + '"' +
-          ' data-site="' + escHtml(d.site) + '">削除</button>',
+          ' data-site="' + escHtml(d.site) + '">完全削除</button>',
       '</td>',
       '</tr>',
     ].join('');
@@ -561,10 +591,27 @@ function renderDriverMasterTable(drivers) {
     });
   });
 
+  tbody.querySelectorAll('.btn-toggle-driver').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var next  = btn.dataset.next;
+      var label = btn.dataset.name + (btn.dataset.site ? '（' + btn.dataset.site + '）' : '');
+      if (!confirm(label + ' を' + (next === '停止' ? '停止' : '再開') + 'しますか？')) return;
+      btn.disabled = true;
+      adminPost({ action: 'adminSetDriverStatus', idToken: state.idToken, lineUserId: btn.dataset.uid, site: btn.dataset.site, status: next })
+        .then(function() {
+          showToast(next === '停止' ? '停止しました' : '再開しました');
+          openDriverMasterScreen();
+        }).catch(function() {
+          showToast('更新に失敗しました');
+          btn.disabled = false;
+        });
+    });
+  });
+
   tbody.querySelectorAll('.btn-delete-driver').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var label = btn.dataset.name + (btn.dataset.site ? '（' + btn.dataset.site + '）' : '');
-      if (!confirm(label + ' を削除しますか？')) return;
+      if (!confirm(label + ' を完全に削除しますか？\n単価・基準時間などの設定も失われます。一時停止なら「停止」を使ってください。')) return;
       btn.disabled = true;
       adminPost({ action: 'adminDeleteDriver', idToken: state.idToken, lineUserId: btn.dataset.uid, site: btn.dataset.site })
         .then(function() {
@@ -580,6 +627,7 @@ function renderDriverMasterTable(drivers) {
 
 function openDriverModal(driver) {
   _driverMasterIsNew = !driver || !!driver._isFromUnregistered;
+  _driverEditOriginalSite = (driver && !_driverMasterIsNew) ? (driver.site || '') : '';
   document.getElementById('modal-driver-title').textContent = _driverMasterIsNew ? 'ドライバー追加' : 'ドライバー編集';
 
   var uidInput = document.getElementById('driver-uid');
@@ -623,6 +671,7 @@ function saveDriver() {
     baseWorkMinutes: Number(document.getElementById('driver-base-min').value) || 0,
     breakMinutes:    Number(document.getElementById('driver-break-min').value) || 0,
     isNew:           _driverMasterIsNew,
+    originalSite:    _driverEditOriginalSite,
   }).then(function() {
     closeDriverModal();
     showToast('保存しました');

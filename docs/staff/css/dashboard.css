@@ -157,6 +157,8 @@ tbody tr:hover { background: #f8f9fa; }
 .badge-確認待ち { background: #fef7e0; color: #b06000; }
 .badge-確定    { background: #e6f4ea; color: #137333; }
 .badge-OCRエラー { background: #fce8e6; color: #c5221f; }
+.badge-稼働 { background: #e6f4ea; color: #137333; }
+.badge-停止 { background: #fce8e6; color: #c5221f; }
 
 /* ===== OCR確認画面 ===== */
 #ocr-table tbody td { padding: 4px 16px; }

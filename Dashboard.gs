@@ -49,7 +49,9 @@ function handleAdminPost(payload) {
     case 'adminExportData':     return handleAdminExportData_(payload);
     case 'adminGetDriverMaster': return handleAdminGetDriverMaster_();
     case 'adminSaveDriver':      return handleAdminSaveDriver_(payload, email);
+    case 'adminSetDriverStatus': return handleAdminSetDriverStatus_(payload, email);
     case 'adminDeleteDriver':    return handleAdminDeleteDriver_(payload, email);
+    case 'adminDeleteUnregistered': return handleAdminDeleteUnregistered_(payload, email);
     default: return jsonResponse({ error: 'invalid admin action' });
   }
 }
@@ -421,6 +423,7 @@ function handleAdminGetDriverMaster_() {
       unitPrice:       row[3] || 0,
       baseWorkMinutes: row[4] || 0,
       breakMinutes:    row[5] || 0,
+      status:          row[6] || '稼働',
     };
   });
 
@@ -440,11 +443,11 @@ function handleAdminSaveDriver_(payload, email) {
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
-  var uid       = payload.lineUserId || '';
-  var site      = payload.site || '';
-  var rowValues = [uid, payload.name || '', site, payload.unitPrice || 0, payload.baseWorkMinutes || 0, payload.breakMinutes || 0];
+  var uid  = payload.lineUserId || '';
+  var site = payload.site || '';
 
   if (payload.isNew) {
+    var rowValues = [uid, payload.name || '', site, payload.unitPrice || 0, payload.baseWorkMinutes || 0, payload.breakMinutes || 0, '稼働'];
     sheet.appendRow(rowValues);
     // 未登録ドライバーシートから同一UIDの行を削除
     var unregSheet = ss.getSheetByName(SHEET_UNREGISTERED);
@@ -456,18 +459,64 @@ function handleAdminSaveDriver_(payload, email) {
     }
     appendAuditLog_(email, 'ドライバー追加', uid, payload.name || '', '', '', '', '');
   } else {
-    var targetRow = -1;
+    // 編集は元の現場名(originalSite)で対象行を特定（現場名変更による重複行を防ぐ）
+    var originalSite   = payload.originalSite || '';
+    var targetRow      = -1;
+    var existingStatus = '稼働';
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === uid && (data[i][2] || '') === site) { targetRow = i + 1; break; }
+      if (data[i][0] === uid && (data[i][2] || '') === originalSite) {
+        targetRow      = i + 1;
+        existingStatus = data[i][6] || '稼働';   // 稼働状態は編集で変えない
+        break;
+      }
     }
+    var rowValuesEdit = [uid, payload.name || '', site, payload.unitPrice || 0, payload.baseWorkMinutes || 0, payload.breakMinutes || 0, existingStatus];
     if (targetRow > 0) {
-      sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+      sheet.getRange(targetRow, 1, 1, rowValuesEdit.length).setValues([rowValuesEdit]);
     } else {
-      sheet.appendRow(rowValues);
+      sheet.appendRow(rowValuesEdit);
     }
     appendAuditLog_(email, 'ドライバー編集', uid, payload.name || '', '', '', '', '');
   }
 
+  return jsonResponse({ status: 'ok' });
+}
+
+function handleAdminSetDriverStatus_(payload, email) {
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_DRIVER);
+  var data  = sheet.getDataRange().getValues();
+
+  var uid        = payload.lineUserId || '';
+  var site       = payload.site || '';
+  var status     = payload.status === '停止' ? '停止' : '稼働';
+  var driverName = '';
+
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === uid && (data[i][2] || '') === site) {
+      driverName = data[i][1];
+      sheet.getRange(i + 1, 7, 1, 1).setValues([[status]]);
+      break;
+    }
+  }
+
+  appendAuditLog_(email, status === '停止' ? '稼働停止' : '稼働再開', uid, driverName, '', '', '', '');
+  return jsonResponse({ status: 'ok' });
+}
+
+function handleAdminDeleteUnregistered_(payload, email) {
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_UNREGISTERED);
+  var uid   = payload.lineUserId || '';
+
+  if (sheet) {
+    var data = sheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (data[i][1] === uid) sheet.deleteRow(i + 1);
+    }
+  }
+
+  appendAuditLog_(email, '未登録削除', uid, '', '', '', '', '');
   return jsonResponse({ status: 'ok' });
 }
 
