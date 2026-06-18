@@ -1,7 +1,7 @@
 // 初回セットアップ用。実行後は削除してOK。
 
 function setupSheets() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var ss = SpreadsheetApp.openById(getConfig_().sheetId);
 
   // 立替明細の「確認ステータス」列を物理削除（廃止列）
   var expSheetPre = ss.getSheetByName(SHEET_EXPENSE);
@@ -78,7 +78,7 @@ function setupSheets() {
 
 // アップロードIDを既存OCR・立替明細行に紐づける（一回限りのバックフィル）
 function backfillUploadIds() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var ss = SpreadsheetApp.openById(getConfig_().sheetId);
 
   // SHEET_RECEIVED から (lineUserId|yearMonth) → uploadId のマップを構築
   // SHEET_RECEIVED: [1]=uid, [4]=yearMonth, [13]=uploadId

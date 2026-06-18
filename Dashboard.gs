@@ -60,7 +60,7 @@ function handleAdminPost(payload) {
 
 function handleAdminGetOverview_(payload) {
   var yearMonth = payload.yearMonth;
-  var ss        = SpreadsheetApp.openById(SHEET_ID);
+  var ss        = SpreadsheetApp.openById(getConfig_().sheetId);
   var data      = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
 
   // SHEET_RECEIVED: [4]=yearMonth, [8]=status
@@ -80,7 +80,7 @@ function handleAdminGetOverview_(payload) {
 
 function handleAdminGetDriverList_(payload) {
   var yearMonth = payload.yearMonth;
-  var ss        = SpreadsheetApp.openById(SHEET_ID);
+  var ss        = SpreadsheetApp.openById(getConfig_().sheetId);
 
   var recvData    = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
   var driverData  = ss.getSheetByName(SHEET_DRIVER).getDataRange().getValues();
@@ -185,7 +185,7 @@ function handleAdminGetOcrDetail_(payload) {
   var lineUserId = payload.lineUserId;
   var yearMonth  = payload.yearMonth;
   var site       = payload.site || '';
-  var ss         = SpreadsheetApp.openById(SHEET_ID);
+  var ss         = SpreadsheetApp.openById(getConfig_().sheetId);
 
   // SHEET_OCR: [0]=uid, [2]=site, [3]=yearMonth, [4]=day, [5]=start, [6]=end, [7]=isWorking, [8]=status, [9]=fixedStart, [10]=fixedEnd
   var ocrData = ss.getSheetByName(SHEET_OCR).getDataRange().getValues();
@@ -282,7 +282,7 @@ function handleAdminSaveCorrection_(payload, email) {
   var driver     = getDriverByUserIdAndSite_(lineUserId, site);
   var driverName = driver ? driver.name : '';
 
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_OCR);
   var data  = sheet.getDataRange().getValues();
 
@@ -329,7 +329,7 @@ function handleAdminConfirmMonth_(payload, email) {
   var driver     = getDriverByUserIdAndSite_(lineUserId, site);
   if (!driver) return jsonResponse({ error: 'driver not found' });
 
-  var ss      = SpreadsheetApp.openById(SHEET_ID);
+  var ss      = SpreadsheetApp.openById(getConfig_().sheetId);
   var ocrData = ss.getSheetByName(SHEET_OCR).getDataRange().getValues();
 
   // SHEET_OCR: [2]=site, [3]=yearMonth, [5]=ocrStart, [6]=ocrEnd, [9]=fixedStart, [10]=fixedEnd
@@ -384,7 +384,7 @@ function handleAdminConfirmMonth_(payload, email) {
 
 function handleAdminExportData_(payload) {
   var yearMonth   = payload.yearMonth;
-  var ss          = SpreadsheetApp.openById(SHEET_ID);
+  var ss          = SpreadsheetApp.openById(getConfig_().sheetId);
   var monthlyData = ss.getSheetByName(SHEET_MONTHLY).getDataRange().getValues();
 
   // SHEET_MONTHLY: [1]=name, [2]=site, [3]=yearMonth, [4]=workingDays, [5]=totalMin, [7]=unitPrice, [8]=billingAmount, [9]=confirmedAt
@@ -410,7 +410,7 @@ function handleAdminExportData_(payload) {
 // ===== ドライバーマスタ管理 =====
 
 function handleAdminGetDriverMaster_() {
-  var ss          = SpreadsheetApp.openById(SHEET_ID);
+  var ss          = SpreadsheetApp.openById(getConfig_().sheetId);
   var driverData  = ss.getSheetByName(SHEET_DRIVER).getDataRange().getValues();
   var unregData   = ss.getSheetByName(SHEET_UNREGISTERED);
   var unregRows   = unregData ? unregData.getDataRange().getValues() : [[]];
@@ -439,7 +439,7 @@ function handleAdminGetDriverMaster_() {
 }
 
 function handleAdminSaveDriver_(payload, email) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
@@ -483,7 +483,7 @@ function handleAdminSaveDriver_(payload, email) {
 }
 
 function handleAdminSetDriverStatus_(payload, email) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
@@ -505,7 +505,7 @@ function handleAdminSetDriverStatus_(payload, email) {
 }
 
 function handleAdminDeleteUnregistered_(payload, email) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_UNREGISTERED);
   var uid   = payload.lineUserId || '';
 
@@ -521,7 +521,7 @@ function handleAdminDeleteUnregistered_(payload, email) {
 }
 
 function handleAdminDeleteDriver_(payload, email) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
@@ -545,7 +545,7 @@ function handleAdminDeleteDriver_(payload, email) {
 
 function appendAuditLog_(email, action, lineUserId, driverName, yearMonth, before, after, note) {
   try {
-    var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_LOG);
+    var sheet = SpreadsheetApp.openById(getConfig_().sheetId).getSheetByName(SHEET_LOG);
     if (!sheet) return;
     sheet.appendRow([new Date(), email, action, lineUserId, driverName, yearMonth, before || '', after || '', note || '']);
   } catch (e) {
@@ -557,7 +557,7 @@ function appendAuditLog_(email, action, lineUserId, driverName, yearMonth, befor
 function getMonthDriverFolderUrls_(yearMonth) {
   var result = {};
   try {
-    var rootFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var rootFolder = DriveApp.getFolderById(getConfig_().folderId);
     var monthIter  = rootFolder.getFoldersByName(yearMonth);
     if (!monthIter.hasNext()) return result;
     var monthFolder  = monthIter.next();

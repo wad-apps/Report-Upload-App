@@ -1,6 +1,4 @@
 // ===== 定数 =====
-var SHEET_ID        = '1vPSbmyEUov0-hasJ9YVqggt2ClP9Blx8Do1zqlb8chc';
-var DRIVE_FOLDER_ID = '1T9j-k7DY5DGwscHQQlhIkEEE4uggQGXR';
 
 var SHEET_RECEIVED = '月報受信ファイル';
 var SHEET_OCR      = 'OCR結果データ';
@@ -75,7 +73,7 @@ function saveUnregisteredDriver_(lineUserId, displayName) {
   // マスタに既存（停止含む全状態）なら未登録には記録しない
   if (driverExistsInMaster_(lineUserId)) return;
   try {
-    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
     var sheet = ss.getSheetByName(SHEET_UNREGISTERED);
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_UNREGISTERED);
@@ -99,7 +97,7 @@ function saveUnregisteredDriver_(lineUserId, displayName) {
 // マスタに当該UIDの行が1つでも存在するか（稼働/停止を問わない）
 function driverExistsInMaster_(userId) {
   if (!userId) return false;
-  var ss   = SpreadsheetApp.openById(SHEET_ID);
+  var ss   = SpreadsheetApp.openById(getConfig_().sheetId);
   var data = ss.getSheetByName(SHEET_DRIVER).getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === userId) return true;
@@ -132,7 +130,7 @@ function handleUploadReport(payload) {
   var fileUrl     = 'https://drive.google.com/file/d/' + fileId + '/view';
   var folderUrl   = 'https://drive.google.com/drive/folders/' + driveResult.folderId;
 
-  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var ss = SpreadsheetApp.openById(getConfig_().sheetId);
 
   // 同一人・同一月・同一現場の既存受信行を削除（Driveファイルごと）
   // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId
@@ -220,7 +218,7 @@ function handleUploadAttachment(payload) {
   var fileId  = driveResult.fileId;
   var fileUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
 
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_ATTACHMENT);
   sheet.appendRow([
     new Date(),         // [0] タイムスタンプ
@@ -248,7 +246,7 @@ function handleGetMyReports(payload) {
 
 function getDriverByUserId(userId) {
   if (!userId) return null;
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
@@ -270,7 +268,7 @@ function getDriverByUserId(userId) {
 // userId の全現場分を配列で返す（稼働中のみ）
 function getDriversByUserId_(userId) {
   if (!userId) return [];
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
@@ -293,7 +291,7 @@ function getDriversByUserId_(userId) {
 // userId + site で1件取得。site が空のときは最初のマッチを返す（後方互換）
 function getDriverByUserIdAndSite_(userId, site) {
   if (!userId) return null;
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_DRIVER);
   var data  = sheet.getDataRange().getValues();
 
@@ -328,7 +326,7 @@ function getDriverByUserIdAndSite_(userId, site) {
 }
 
 function getReportsByUserId_(lineUserId) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
 
@@ -356,7 +354,7 @@ function saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName) {
     fileName
   );
 
-  var rootFolder   = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  var rootFolder   = DriveApp.getFolderById(getConfig_().folderId);
   var monthFolder  = getOrCreateFolder_(rootFolder, yearMonth);
   var folderName   = driver.site ? (driver.name + '_' + driver.site) : driver.name;
   var driverFolder = getOrCreateFolder_(monthFolder, folderName);

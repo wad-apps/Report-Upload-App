@@ -179,7 +179,7 @@ function countWorkingDays_(days) {
 // ===== Sheets書き込み =====
 
 function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploadId, site) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_OCR);
 
   // 同じ lineUserId + yearMonth + site の既存行を削除
@@ -218,7 +218,7 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploa
 }
 
 function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, uploadId, site) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_EXPENSE);
   if (!sheet) return;
 
@@ -255,7 +255,7 @@ function saveExpenseRows_(lineUserId, driverName, yearMonth, fileId, expenses, u
 
 // SHEET_RECEIVED: [6]=fileId, [8]=status(col9), [9]=ocrTime(col10), [12]=noteText(col13)
 function updateReceivedFileStatus_(fileId, status) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -268,7 +268,7 @@ function updateReceivedFileStatus_(fileId, status) {
 
 // OCR完了時に status・OCR実行日時・備考テキストをシートスキャン1回でまとめて更新
 function finalizeReceivedRow_(fileId, status, noteText) {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
   var sheet = ss.getSheetByName(SHEET_RECEIVED);
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
