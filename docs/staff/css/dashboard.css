@@ -292,4 +292,30 @@ tbody tr:hover { background: #f8f9fa; }
 .attachment-link:last-child { border-bottom: none; }
 .attachment-link:hover { text-decoration: underline; }
 
+/* ===== ドライバーマスタ管理 モーダルフォーム ===== */
+.modal-box { width: 100%; }
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.form-field-full { grid-column: 1 / -1; }
+.form-field input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  outline: none;
+}
+.form-field input:focus { border-color: var(--primary); }
+.form-field input[readonly] { cursor: default; color: var(--text-sub); }
+
 .hidden { display: none !important; }

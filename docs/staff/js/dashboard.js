@@ -65,8 +65,18 @@ function setupEvents() {
 
   document.getElementById('btn-export').addEventListener('click', handleExport);
   document.getElementById('btn-modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-overlay').addEventListener('click', closeModal);
   document.getElementById('btn-download-csv').addEventListener('click', downloadCsv);
+
+  document.getElementById('modal-overlay').addEventListener('click', function() {
+    closeModal();
+    closeDriverModal();
+  });
+
+  document.getElementById('btn-driver-master').addEventListener('click', openDriverMasterScreen);
+  document.getElementById('btn-back-from-master').addEventListener('click', function() { showScreen('main'); loadDashboard(false); });
+  document.getElementById('btn-add-driver').addEventListener('click', function() { openDriverModal(null); });
+  document.getElementById('btn-driver-modal-cancel').addEventListener('click', closeDriverModal);
+  document.getElementById('btn-driver-modal-save').addEventListener('click', saveDriver);
 }
 
 // ===== Googleサインイン =====
@@ -460,6 +470,169 @@ function downloadCsv() {
 function closeModal() {
   document.getElementById('modal-export').classList.add('hidden');
   document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+// ===== ドライバーマスタ管理 =====
+var _driverMasterIsNew = false; // モーダルの追加/編集モードフラグ
+
+function openDriverMasterScreen() {
+  showScreen('driver-master');
+  document.getElementById('unregistered-tbody').innerHTML =
+    '<tr><td colspan="4" class="empty-cell">読み込み中...</td></tr>';
+  document.getElementById('driver-master-tbody').innerHTML =
+    '<tr><td colspan="6" class="empty-cell">読み込み中...</td></tr>';
+
+  adminPost({ action: 'adminGetDriverMaster', idToken: state.idToken })
+    .then(function(res) {
+      renderUnregisteredTable(res.unregistered || []);
+      renderDriverMasterTable(res.drivers || []);
+    }).catch(function() {
+      showToast('マスタの読み込みに失敗しました');
+    });
+}
+
+function renderUnregisteredTable(rows) {
+  var tbody = document.getElementById('unregistered-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">未登録ユーザーはいません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(r) {
+    return [
+      '<tr>',
+      '<td style="color:var(--text-sub);font-size:12px">' + escHtml(r.timestamp) + '</td>',
+      '<td><strong>' + escHtml(r.displayName) + '</strong></td>',
+      '<td style="font-size:12px;font-family:monospace">' + escHtml(r.lineUserId) + '</td>',
+      '<td><button class="btn btn-sm btn-outline btn-register-driver"' +
+          ' data-uid="' + escHtml(r.lineUserId) + '"' +
+          ' data-name="' + escHtml(r.displayName) + '">登録</button></td>',
+      '</tr>',
+    ].join('');
+  }).join('');
+
+  tbody.querySelectorAll('.btn-register-driver').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openDriverModal({ lineUserId: btn.dataset.uid, name: btn.dataset.name, site: '', unitPrice: 0, baseWorkMinutes: 0, breakMinutes: 0, _isFromUnregistered: true });
+    });
+  });
+}
+
+function renderDriverMasterTable(drivers) {
+  var tbody = document.getElementById('driver-master-tbody');
+  if (!drivers.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">登録済みドライバーはいません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = drivers.map(function(d) {
+    return [
+      '<tr>',
+      '<td><strong>' + escHtml(d.name) + '</strong></td>',
+      '<td>' + escHtml(d.site) + '</td>',
+      '<td>¥' + Number(d.unitPrice || 0).toLocaleString() + '</td>',
+      '<td>' + (d.baseWorkMinutes || 0) + '</td>',
+      '<td>' + (d.breakMinutes || 0) + '</td>',
+      '<td style="display:flex;gap:6px">',
+      '<button class="btn btn-sm btn-outline btn-edit-driver"' +
+          ' data-uid="' + escHtml(d.lineUserId) + '"' +
+          ' data-name="' + escHtml(d.name) + '"' +
+          ' data-site="' + escHtml(d.site) + '"' +
+          ' data-unit="' + (d.unitPrice || 0) + '"' +
+          ' data-base="' + (d.baseWorkMinutes || 0) + '"' +
+          ' data-break="' + (d.breakMinutes || 0) + '">編集</button>',
+      '<button class="btn btn-sm btn-ghost btn-delete-driver"' +
+          ' data-uid="' + escHtml(d.lineUserId) + '"' +
+          ' data-name="' + escHtml(d.name) + '"' +
+          ' data-site="' + escHtml(d.site) + '">削除</button>',
+      '</td>',
+      '</tr>',
+    ].join('');
+  }).join('');
+
+  tbody.querySelectorAll('.btn-edit-driver').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openDriverModal({
+        lineUserId:      btn.dataset.uid,
+        name:            btn.dataset.name,
+        site:            btn.dataset.site,
+        unitPrice:       Number(btn.dataset.unit),
+        baseWorkMinutes: Number(btn.dataset.base),
+        breakMinutes:    Number(btn.dataset.break),
+      });
+    });
+  });
+
+  tbody.querySelectorAll('.btn-delete-driver').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var label = btn.dataset.name + (btn.dataset.site ? '（' + btn.dataset.site + '）' : '');
+      if (!confirm(label + ' を削除しますか？')) return;
+      btn.disabled = true;
+      adminPost({ action: 'adminDeleteDriver', idToken: state.idToken, lineUserId: btn.dataset.uid, site: btn.dataset.site })
+        .then(function() {
+          showToast('削除しました');
+          openDriverMasterScreen();
+        }).catch(function() {
+          showToast('削除に失敗しました');
+          btn.disabled = false;
+        });
+    });
+  });
+}
+
+function openDriverModal(driver) {
+  _driverMasterIsNew = !driver || !!driver._isFromUnregistered;
+  document.getElementById('modal-driver-title').textContent = _driverMasterIsNew ? 'ドライバー追加' : 'ドライバー編集';
+
+  var uidInput = document.getElementById('driver-uid');
+  uidInput.value    = driver ? (driver.lineUserId || '') : '';
+  uidInput.readOnly = !_driverMasterIsNew;
+  uidInput.style.background = _driverMasterIsNew ? '' : '#f1f3f4';
+
+  document.getElementById('driver-name').value       = driver ? (driver.name || '') : '';
+  document.getElementById('driver-site').value       = driver ? (driver.site || '') : '';
+  document.getElementById('driver-unit-price').value = driver ? (driver.unitPrice || '') : '';
+  document.getElementById('driver-base-min').value   = driver ? (driver.baseWorkMinutes || '') : '';
+  document.getElementById('driver-break-min').value  = driver ? (driver.breakMinutes || '') : '';
+
+  document.getElementById('modal-driver').classList.remove('hidden');
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('driver-name').focus();
+}
+
+function closeDriverModal() {
+  document.getElementById('modal-driver').classList.add('hidden');
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+function saveDriver() {
+  var uid  = document.getElementById('driver-uid').value.trim();
+  var name = document.getElementById('driver-name').value.trim();
+  if (!uid)  { showToast('LINEユーザーIDを入力してください'); return; }
+  if (!name) { showToast('ドライバー名を入力してください'); return; }
+
+  var saveBtn = document.getElementById('btn-driver-modal-save');
+  saveBtn.disabled    = true;
+  saveBtn.textContent = '保存中...';
+
+  adminPost({
+    action:          'adminSaveDriver',
+    idToken:         state.idToken,
+    lineUserId:      uid,
+    name:            name,
+    site:            document.getElementById('driver-site').value.trim(),
+    unitPrice:       Number(document.getElementById('driver-unit-price').value) || 0,
+    baseWorkMinutes: Number(document.getElementById('driver-base-min').value) || 0,
+    breakMinutes:    Number(document.getElementById('driver-break-min').value) || 0,
+    isNew:           _driverMasterIsNew,
+  }).then(function() {
+    closeDriverModal();
+    showToast('保存しました');
+    openDriverMasterScreen();
+  }).catch(function() {
+    showToast('保存に失敗しました');
+  }).then(function() {
+    saveBtn.disabled    = false;
+    saveBtn.textContent = '保存';
+  });
 }
 
 // ===== API =====

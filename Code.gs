@@ -39,6 +39,9 @@ function doPost(e) {
       case 'adminSaveCorrection':
       case 'adminConfirmMonth':
       case 'adminExportData':
+      case 'adminGetDriverMaster':
+      case 'adminSaveDriver':
+      case 'adminDeleteDriver':
         return handleAdminPost(payload);
       default:
         return jsonResponse({ error: 'invalid action' });

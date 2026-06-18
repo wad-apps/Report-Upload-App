@@ -47,6 +47,9 @@ function handleAdminPost(payload) {
     case 'adminSaveCorrection': return handleAdminSaveCorrection_(payload, email);
     case 'adminConfirmMonth':   return handleAdminConfirmMonth_(payload, email);
     case 'adminExportData':     return handleAdminExportData_(payload);
+    case 'adminGetDriverMaster': return handleAdminGetDriverMaster_();
+    case 'adminSaveDriver':      return handleAdminSaveDriver_(payload, email);
+    case 'adminDeleteDriver':    return handleAdminDeleteDriver_(payload, email);
     default: return jsonResponse({ error: 'invalid admin action' });
   }
 }
@@ -400,6 +403,85 @@ function handleAdminExportData_(payload) {
 
   rows.sort(function(a, b) { return a.driverName.localeCompare(b.driverName, 'ja'); });
   return jsonResponse({ rows: rows, yearMonth: yearMonth });
+}
+
+// ===== ドライバーマスタ管理 =====
+
+function handleAdminGetDriverMaster_() {
+  var ss          = SpreadsheetApp.openById(SHEET_ID);
+  var driverData  = ss.getSheetByName(SHEET_DRIVER).getDataRange().getValues();
+  var unregData   = ss.getSheetByName(SHEET_UNREGISTERED);
+  var unregRows   = unregData ? unregData.getDataRange().getValues() : [[]];
+
+  var drivers = driverData.slice(1).filter(function(row) { return !!row[0]; }).map(function(row) {
+    return {
+      lineUserId:      row[0],
+      name:            row[1],
+      site:            row[2] || '',
+      unitPrice:       row[3] || 0,
+      baseWorkMinutes: row[4] || 0,
+      breakMinutes:    row[5] || 0,
+    };
+  });
+
+  var unregistered = unregRows.slice(1).filter(function(row) { return !!row[1]; }).map(function(row) {
+    return {
+      timestamp:   row[0] ? Utilities.formatDate(new Date(row[0]), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : '',
+      lineUserId:  row[1],
+      displayName: row[2] || '',
+    };
+  });
+
+  return jsonResponse({ drivers: drivers, unregistered: unregistered });
+}
+
+function handleAdminSaveDriver_(payload, email) {
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_DRIVER);
+  var data  = sheet.getDataRange().getValues();
+
+  var uid       = payload.lineUserId || '';
+  var site      = payload.site || '';
+  var rowValues = [uid, payload.name || '', site, payload.unitPrice || 0, payload.baseWorkMinutes || 0, payload.breakMinutes || 0];
+
+  if (payload.isNew) {
+    sheet.appendRow(rowValues);
+    appendAuditLog_(email, 'ドライバー追加', uid, payload.name || '', '', '', '', '');
+  } else {
+    var targetRow = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === uid && (data[i][2] || '') === site) { targetRow = i + 1; break; }
+    }
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+    appendAuditLog_(email, 'ドライバー編集', uid, payload.name || '', '', '', '', '');
+  }
+
+  return jsonResponse({ status: 'ok' });
+}
+
+function handleAdminDeleteDriver_(payload, email) {
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_DRIVER);
+  var data  = sheet.getDataRange().getValues();
+
+  var uid        = payload.lineUserId || '';
+  var site       = payload.site || '';
+  var driverName = '';
+
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] === uid && (data[i][2] || '') === site) {
+      driverName = data[i][1];
+      sheet.deleteRow(i + 1);
+      break;
+    }
+  }
+
+  appendAuditLog_(email, 'ドライバー削除', uid, driverName, '', '', '', '');
+  return jsonResponse({ status: 'ok' });
 }
 
 // ===== 操作ログ =====
