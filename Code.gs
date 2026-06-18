@@ -9,6 +9,9 @@ var SHEET_ATTACHMENT   = '添付ファイル';
 var SHEET_LOG          = '操作ログ';
 var SHEET_UNREGISTERED = '未登録ドライバー';
 
+var ALLOWED_MIME_TYPES_ = { 'image/jpeg': true, 'image/png': true, 'image/heic': true, 'image/heif': true, 'application/pdf': true };
+var MAX_BASE64_LEN_     = 20 * 1024 * 1024; // ~15MB 相当（base64は元サイズの約4/3）
+
 // ===== ルーティング =====
 
 function doGet(e) {
@@ -115,6 +118,9 @@ function handleUploadReport(payload) {
   var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
   if (!driver) return jsonResponse({ error: 'unauthorized' });
 
+  var validationError = validateUploadPayload_(payload);
+  if (validationError) return jsonResponse({ error: validationError });
+
   var yearMonth = payload.yearMonth;
   var site      = driver.site || '';
 
@@ -208,6 +214,9 @@ function handleUploadReport(payload) {
 function handleUploadAttachment(payload) {
   var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
   if (!driver) return jsonResponse({ error: 'unauthorized' });
+
+  var validationError = validateUploadPayload_(payload);
+  if (validationError) return jsonResponse({ error: validationError });
 
   var yearMonth = payload.yearMonth;
   var site      = driver.site || '';
@@ -391,6 +400,22 @@ function formatConsentAt_(isoStr) {
   } catch (e) {
     return isoStr;
   }
+}
+
+function validateUploadPayload_(payload) {
+  if (!payload.yearMonth || !/^\d{4}-\d{2}$/.test(payload.yearMonth)) {
+    return 'invalid yearMonth';
+  }
+  var mime = payload.mimeType || 'image/jpeg';
+  if (!ALLOWED_MIME_TYPES_[mime]) {
+    return 'invalid mimeType';
+  }
+  var fields = ['fileBase64', 'fileBase64First', 'fileBase64Second'];
+  for (var i = 0; i < fields.length; i++) {
+    var v = payload[fields[i]];
+    if (v && v.length > MAX_BASE64_LEN_) return 'file too large';
+  }
+  return null;
 }
 
 function isMonthConfirmed_(lineUserId, yearMonth, site) {
