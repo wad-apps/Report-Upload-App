@@ -10,7 +10,7 @@ var SHEET_LOG          = '操作ログ';
 var SHEET_UNREGISTERED = '未登録ドライバー';
 
 var ALLOWED_MIME_TYPES_ = { 'image/jpeg': true, 'image/png': true, 'image/heic': true, 'image/heif': true, 'application/pdf': true };
-var MAX_BASE64_LEN_     = 20 * 1024 * 1024; // ~15MB 相当（base64は元サイズの約4/3）
+var MAX_BASE64_LEN_     = 70 * 1024 * 1024; // ~50MB 相当（base64は元サイズの約4/3）
 var LINE_PROFILE_URL_   = 'https://api.line.me/v2/profile';
 
 // ===== ルーティング =====
@@ -47,6 +47,8 @@ function doPost(e) {
       case 'adminDeleteDriver':
       case 'adminDeleteUnregistered':
         return handleAdminPost(payload);
+      case 'uploadOriginal':
+        return handleUploadOriginal(payload);
       default:
         return jsonResponse({ error: 'invalid action' });
     }
@@ -155,7 +157,8 @@ function handleUploadReport(payload) {
     if (recvData[i][1] === driver.lineUserId &&
         normalizeYearMonth_(recvData[i][4]) === yearMonth &&
         (recvData[i][3] || '') === site) {
-      trashDriveFile_(recvData[i][6]); // [6] = DriveファイルID
+      trashDriveFile_(recvData[i][6]);  // [6] = DriveファイルID（縮小版）
+      trashDriveFile_(recvData[i][15]); // [15] = 原本ファイルID
       recvSheet.deleteRow(i + 1);
     }
   }
@@ -191,6 +194,7 @@ function handleUploadReport(payload) {
     '',                            // [12] 備考テキスト（OCR後に更新）
     uploadId,                      // [13] アップロードID
     folderUrl,                     // [14] フォルダURL
+    fileType === 'pdf' ? fileId : '', // [15] 原本ファイルID（PDF=表示用と同一、画像=uploadOriginalで後から書き込む）
   ]);
 
   // OCR実行（失敗してもアップロード自体は成功扱い）
@@ -258,6 +262,59 @@ function handleUploadAttachment(payload) {
   ]);
 
   return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl });
+}
+
+function handleUploadOriginal(payload) {
+  try { verifyLineToken_(payload.lineAccessToken, payload.lineUserId); } catch(e) { return jsonResponse({ error: 'unauthorized' }); }
+  var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
+  if (!driver) return jsonResponse({ error: 'unauthorized' });
+
+  var validationError = validateUploadPayload_(payload);
+  if (validationError) return jsonResponse({ error: validationError });
+
+  var yearMonth = payload.yearMonth;
+  var site      = driver.site || '';
+
+  if (isMonthConfirmed_(driver.lineUserId, yearMonth, site)) {
+    return jsonResponse({ error: 'confirmed' });
+  }
+
+  var mimeType = payload.mimeType;
+  var base64   = payload.fileBase64;
+  var uploadId = payload.uploadId || '';
+  var origName = payload.fileName || 'original';
+  var fileName = uploadId ? (uploadId + '_原本_' + origName) : origName;
+
+  var result = saveOriginalToDrive_(driver, yearMonth, mimeType, base64, fileName);
+  updateOriginalFileId_(uploadId, result.fileId);
+
+  return jsonResponse({ status: 'ok', fileId: result.fileId });
+}
+
+function saveOriginalToDrive_(driver, yearMonth, mimeType, base64, fileName) {
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
+
+  var rootFolder      = DriveApp.getFolderById(getConfig_().folderId);
+  var monthFolder     = getOrCreateFolder_(rootFolder, yearMonth);
+  var folderName      = driver.site ? (driver.name + '_' + driver.site) : driver.name;
+  var driverFolder    = getOrCreateFolder_(monthFolder, folderName);
+  var originalFolder  = getOrCreateFolder_(driverFolder, '原本');
+
+  var file = originalFolder.createFile(blob);
+  return { fileId: file.getId() };
+}
+
+function updateOriginalFileId_(uploadId, fileId) {
+  if (!uploadId || !fileId) return;
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
+  var sheet = ss.getSheetByName(SHEET_RECEIVED);
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][13] === uploadId) { // [13] = アップロードID
+      sheet.getRange(i + 1, 16).setValue(fileId); // 列[15] = 1-indexed 16列目
+      return;
+    }
+  }
 }
 
 function handleGetMyReports(payload) {

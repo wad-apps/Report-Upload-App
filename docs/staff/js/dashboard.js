@@ -163,10 +163,13 @@ function renderDriverTable(drivers) {
     var ocrTime     = d.ocrTime || '-';
     var btnLabel    = d.isConfirmed ? '確認済み' : '確認する';
     var btnDisabled = d.status !== '確認待ち' && d.status !== '確定' ? 'disabled' : '';
-    var fileLink    = d.fileUrl
+    var fileLink     = d.fileUrl
       ? '<a href="' + escHtml(d.fileUrl) + '" target="_blank" class="btn btn-sm btn-ghost">画像 ↗</a>'
       : '';
-    var folderLink  = d.folderUrl
+    var originalLink = d.originalFileId
+      ? '<a href="https://drive.google.com/file/d/' + escHtml(d.originalFileId) + '/view" target="_blank" class="btn btn-sm btn-ghost">原本 ↗</a>'
+      : '';
+    var folderLink   = d.folderUrl
       ? '<a href="' + escHtml(d.folderUrl) + '" target="_blank" class="btn btn-sm btn-ghost">フォルダ ↗</a>'
       : '';
     return [
@@ -177,7 +180,7 @@ function renderDriverTable(drivers) {
       '<td>' + billingText + '</td>',
       '<td><span class="badge ' + badgeClass + '">' + d.status + '</span></td>',
       '<td style="color:var(--text-sub);font-size:12px">' + ocrTime + '</td>',
-      '<td style="display:flex;gap:6px;align-items:center">' + fileLink + folderLink +
+      '<td style="display:flex;gap:6px;align-items:center">' + fileLink + originalLink + folderLink +
           '<button class="btn btn-sm btn-outline btn-review" ' + btnDisabled +
           ' data-uid="' + escHtml(d.lineUserId) + '"' +
           ' data-name="' + escHtml(d.driverName) + '"' +
@@ -225,6 +228,14 @@ function openOcrScreen(lineUserId, driverName, site, folderUrl) {
       fileLinkEl.classList.remove('hidden');
     } else {
       fileLinkEl.classList.add('hidden');
+    }
+
+    var originalLinkEl = document.getElementById('ocr-original-link');
+    if (res.originalFileId) {
+      originalLinkEl.href = 'https://drive.google.com/file/d/' + encodeURIComponent(res.originalFileId) + '/view';
+      originalLinkEl.classList.remove('hidden');
+    } else {
+      originalLinkEl.classList.add('hidden');
     }
 
     var resolvedFolder = res.folderUrl || folderUrl;

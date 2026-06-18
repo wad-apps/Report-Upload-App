@@ -98,7 +98,7 @@ function handleAdminGetDriverList_(payload) {
   });
 
   // 対象年月の受信ファイルをドライバー×現場ごとに集約（最新1件）
-  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [6]=fileId, [7]=fileUrl, [8]=status, [9]=ocrTime, [14]=folderUrl
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [5]=fileType, [6]=fileId, [7]=fileUrl, [8]=status, [9]=ocrTime, [14]=folderUrl, [15]=originalFileId
   var submissionMap = {};
   recvData.slice(1).forEach(function(row) {
     if (normalizeYearMonth_(row[4]) !== yearMonth) return;
@@ -108,15 +108,16 @@ function handleAdminGetDriverList_(payload) {
     var ts   = row[0] ? new Date(row[0]).getTime() : 0;
     if (!submissionMap[key] || ts > submissionMap[key].ts) {
       submissionMap[key] = {
-        ts:        ts,
-        uid:       uid,
-        site:      site,
-        fileId:    row[6] || '',
-        fileUrl:   row[7],
-        fileType:  row[5],
-        status:    row[8],
-        ocrTime:   row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'MM/dd HH:mm') : '',
-        folderUrl: row[14] || '',
+        ts:             ts,
+        uid:            uid,
+        site:           site,
+        fileId:         row[6] || '',
+        fileUrl:        row[7],
+        fileType:       row[5],
+        status:         row[8],
+        ocrTime:        row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'MM/dd HH:mm') : '',
+        folderUrl:      row[14] || '',
+        originalFileId: row[15] || '',
       };
     }
   });
@@ -153,18 +154,19 @@ function handleAdminGetDriverList_(payload) {
     var up  = d.unitPrice || 0;
     var folderName = d.site ? ((d.name || '') + '_' + d.site) : (d.name || '');
     return {
-      lineUserId:    sub.uid,
-      driverName:    d.name || '',
-      site:          d.site || '',
-      unitPrice:     up,
-      fileUrl:       sub.fileUrl,
-      fileType:      sub.fileType,
-      status:        sub.status,
-      ocrTime:       sub.ocrTime,
-      workingDays:   wd,
-      billingAmount: confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
-      isConfirmed:   !!confirmedMap[key],
-      folderUrl:     sub.folderUrl || folderUrlMap[folderName] || '',
+      lineUserId:     sub.uid,
+      driverName:     d.name || '',
+      site:           d.site || '',
+      unitPrice:      up,
+      fileUrl:        sub.fileUrl,
+      fileType:       sub.fileType,
+      status:         sub.status,
+      ocrTime:        sub.ocrTime,
+      workingDays:    wd,
+      billingAmount:  confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
+      isConfirmed:    !!confirmedMap[key],
+      folderUrl:      sub.folderUrl || folderUrlMap[folderName] || '',
+      originalFileId: sub.originalFileId || '',
     };
   });
 
@@ -204,18 +206,20 @@ function handleAdminGetOcrDetail_(payload) {
   });
   days.sort(function(a, b) { return a.day - b.day; });
 
-  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId, [7]=fileUrl, [12]=noteText, [14]=folderUrl
-  var recvData  = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
-  var fileUrl   = '';
-  var fileId    = '';
-  var noteText  = '';
-  var folderUrl = '';
+  // SHEET_RECEIVED: [1]=uid, [3]=site, [4]=yearMonth, [6]=fileId, [7]=fileUrl, [12]=noteText, [14]=folderUrl, [15]=originalFileId
+  var recvData       = ss.getSheetByName(SHEET_RECEIVED).getDataRange().getValues();
+  var fileUrl        = '';
+  var fileId         = '';
+  var noteText       = '';
+  var folderUrl      = '';
+  var originalFileId = '';
   recvData.slice(1).forEach(function(row) {
     if (row[1] === lineUserId && normalizeYearMonth_(row[4]) === yearMonth && (row[3] || '') === site) {
-      fileUrl   = row[7];
-      fileId    = row[6] || '';
-      noteText  = row[12] || '';
-      folderUrl = row[14] || '';
+      fileUrl        = row[7];
+      fileId         = row[6] || '';
+      noteText       = row[12] || '';
+      folderUrl      = row[14] || '';
+      originalFileId = row[15] || '';
     }
   });
 
@@ -259,14 +263,15 @@ function handleAdminGetOcrDetail_(payload) {
   }
 
   return jsonResponse({
-    days:        days,
-    fileUrl:     fileUrl,
-    folderUrl:   folderUrl,
-    driver:      driver,
-    yearMonth:   yearMonth,
-    expenses:    expenses,
-    noteText:    noteText,
-    attachments: attachments,
+    days:           days,
+    fileUrl:        fileUrl,
+    folderUrl:      folderUrl,
+    originalFileId: originalFileId,
+    driver:         driver,
+    yearMonth:      yearMonth,
+    expenses:       expenses,
+    noteText:       noteText,
+    attachments:    attachments,
   });
 }
 

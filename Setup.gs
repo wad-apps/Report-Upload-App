@@ -17,8 +17,8 @@ function setupSheets() {
   var schemas = [
     {
       name: SHEET_RECEIVED,
-      // [0]timestamp [1]uid [2]name [3]site [4]yearMonth [5]fileType [6]fileId [7]fileUrl [8]status [9]ocrTime [10]consent [11]consentAt [12]noteText [13]uploadId [14]folderUrl
-      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '現場名', '年月', 'ファイル種別', 'DriveファイルID', 'DriveURL', 'ステータス', 'OCR実行日時', '同意', '同意日時', '備考テキスト', 'アップロードID', 'フォルダURL']
+      // [0]timestamp [1]uid [2]name [3]site [4]yearMonth [5]fileType [6]fileId [7]fileUrl [8]status [9]ocrTime [10]consent [11]consentAt [12]noteText [13]uploadId [14]folderUrl [15]originalFileId
+      headers: ['タイムスタンプ', 'LINEユーザーID', 'ドライバー名', '現場名', '年月', 'ファイル種別', 'DriveファイルID', 'DriveURL', 'ステータス', 'OCR実行日時', '同意', '同意日時', '備考テキスト', 'アップロードID', 'フォルダURL', '原本ファイルID']
     },
     {
       name: SHEET_OCR,

@@ -2,6 +2,8 @@
 var LIFF_ID          = window.APP_CONFIG.LIFF_ID;
 var GAS_URL          = window.APP_CONFIG.GAS_URL;
 var TAG_REDIRECT_URL = window.APP_CONFIG.TAG_REDIRECT_URL;
+var MAX_FILE_BYTES   = window.APP_CONFIG.MAX_FILE_BYTES;
+var MAX_TOTAL_BYTES  = window.APP_CONFIG.MAX_TOTAL_BYTES;
 
 // ===== 状態 =====
 var state = {
@@ -122,6 +124,30 @@ function uploadReport(yearMonth, file, uploadId) {
   });
 }
 
+function uploadOriginal(yearMonth, file, uploadId) {
+  if (file.type === 'application/pdf') return Promise.resolve(); // PDFはバックエンド側で原本保存済み
+  var site = state.selectedDriver ? (state.selectedDriver.site || '') : '';
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      gasPost({
+        action:          'uploadOriginal',
+        lineUserId:      state.lineUserId,
+        lineAccessToken: state.lineAccessToken,
+        site:            site,
+        yearMonth:       yearMonth,
+        mimeType:        file.type,
+        fileBase64:      base64,
+        fileName:        file.name,
+        uploadId:        uploadId,
+      }).then(resolve).catch(reject);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // 画像の向きを判定して分割し、フル + 前半 + 後半 の base64 を返す
 // Drive保存用フル画像は2000px上限、OCR用ハーフは1400px上限（API転送量削減）
 function splitForOcr(file) {
@@ -231,12 +257,18 @@ function setupEventListeners() {
   document.getElementById('attachment-input').addEventListener('change', function(e) {
     var files = e.target.files;
     if (!files || !files.length) return;
-    var over = state.attachmentFiles.length + files.length > 10;
+    var currentTotal = state.attachmentFiles.reduce(function(sum, f) { return sum + f.size; }, 0);
+    var sizeOver = false;
+    var countOver = state.attachmentFiles.length + files.length > 10;
     var addCount = Math.min(files.length, 10 - state.attachmentFiles.length);
     for (var i = 0; i < addCount; i++) {
+      if (files[i].size > MAX_FILE_BYTES) { sizeOver = true; continue; }
+      if (currentTotal + files[i].size > MAX_TOTAL_BYTES) { sizeOver = true; continue; }
+      currentTotal += files[i].size;
       state.attachmentFiles.push(files[i]);
     }
-    if (over) showToast('添付ファイルは最大10件です');
+    if (sizeOver)  showToast('サイズ超過のファイルはスキップされました（1件50MB・合計200MB上限）');
+    else if (countOver) showToast('添付ファイルは最大10件です');
     renderAttachmentList();
     e.target.value = '';
   });
@@ -260,6 +292,10 @@ function setupEventListeners() {
 // ===== ファイル選択 =====
 
 function handleFileSelected(file) {
+  if (file.size > MAX_FILE_BYTES) {
+    showToast('ファイルサイズが上限（50MB）を超えています');
+    return;
+  }
   state.selectedFile     = file;
   state.selectedMimeType = file.type;
   state.splitResult      = null;
@@ -317,6 +353,12 @@ function handleSubmit() {
   if (!state.lineUserId)         { showToast('ログインし直してください'); return; }
   if (!state.selectedDriver)     { showToast('現場を選択してください'); return; }
 
+  var totalBytes = state.selectedFile.size + state.attachmentFiles.reduce(function(sum, f) { return sum + f.size; }, 0);
+  if (totalBytes > MAX_TOTAL_BYTES) {
+    showToast('ファイルの合計サイズが上限（200MB）を超えています');
+    return;
+  }
+
   var site = state.selectedDriver.site || '';
   var alreadySubmitted = state.reports.some(function(r) {
     return r.yearMonth === yearMonth && (r.site || '') === site;
@@ -334,11 +376,22 @@ function handleSubmit() {
 
 function doSubmit(yearMonth) {
   var uploadId = Math.random().toString(36).substr(2, 6).toUpperCase();
+  var isPdf = state.selectedFile.type === 'application/pdf';
 
   showOverlay(true);
   updateOverlayText('送信中...');
 
-  uploadReport(yearMonth, state.selectedFile, uploadId)
+  var originalFailed = false;
+  var originalPromise = isPdf
+    ? Promise.resolve()
+    : uploadOriginal(yearMonth, state.selectedFile, uploadId).catch(function() {
+        originalFailed = true;
+      });
+
+  Promise.all([
+    uploadReport(yearMonth, state.selectedFile, uploadId),
+    originalPromise,
+  ])
     .then(function() {
       if (state.attachmentFiles.length === 0) return Promise.resolve();
       updateOverlayText('添付ファイルをアップロード中...');
@@ -349,6 +402,9 @@ function doSubmit(yearMonth) {
       var ym = yearMonth.replace('-', '年') + '月';
       document.getElementById('done-message').textContent = ym + '分の月報を送信しました';
       showScreen('done');
+      if (originalFailed) {
+        showToast('原本ファイルの保存に失敗しました。担当者にお知らせください。');
+      }
     })
     .catch(function(err) {
       showOverlay(false);
