@@ -15,6 +15,7 @@ var state = {
   attachmentFiles:  [],
   splitResult:      null, // ファイル選択時にバックグラウンドで前処理した分割結果
   splitResultFor:   null, // splitResult が対応するファイルオブジェクト
+  lineAccessToken:  null,
 };
 
 // ===== 初期化 =====
@@ -34,13 +35,14 @@ function initApp() {
         liff.login();
         return Promise.reject('not_logged_in');
       }
+      state.lineAccessToken = liff.getAccessToken();
       return liff.getProfile();
     })
     .then(function(profile) {
       state.lineUserId  = profile.userId;
       state.displayName = profile.displayName;
       // プロフィール＋履歴を1回のAPIで取得
-      return gasPost({ action: 'bootstrap', lineUserId: profile.userId, displayName: profile.displayName });
+      return gasPost({ action: 'bootstrap', lineUserId: profile.userId, displayName: profile.displayName, lineAccessToken: state.lineAccessToken });
     })
     .then(function(res) {
       // drivers 配列（新形式）と driver 単体（旧形式）の両方に対応
@@ -85,13 +87,14 @@ function uploadReport(yearMonth, file, uploadId) {
       reader.onload = function(e) {
         var base64 = e.target.result.split(',')[1];
         gasPost(Object.assign({
-          action:     'uploadReport',
-          lineUserId: state.lineUserId,
-          site:       site,
-          yearMonth:  yearMonth,
-          mimeType:   'application/pdf',
-          fileBase64: base64,
-          fileName:   file.name,
+          action:           'uploadReport',
+          lineUserId:       state.lineUserId,
+          lineAccessToken:  state.lineAccessToken,
+          site:             site,
+          yearMonth:        yearMonth,
+          mimeType:         'application/pdf',
+          fileBase64:       base64,
+          fileName:         file.name,
         }, consentPayload)).then(resolve).catch(reject);
       };
       reader.onerror = reject;
@@ -107,6 +110,7 @@ function uploadReport(yearMonth, file, uploadId) {
     return gasPost(Object.assign({
       action:           'uploadReport',
       lineUserId:       state.lineUserId,
+      lineAccessToken:  state.lineAccessToken,
       site:             site,
       yearMonth:        yearMonth,
       mimeType:         'image/jpeg',
@@ -382,10 +386,11 @@ function uploadAttachments(yearMonth, files, uploadId) {
 
     return getBase64.then(function(base64) {
       return gasPost({
-        action:     'uploadAttachment',
-        lineUserId: state.lineUserId,
-        site:       site,
-        yearMonth:  yearMonth,
+        action:          'uploadAttachment',
+        lineUserId:      state.lineUserId,
+        lineAccessToken: state.lineAccessToken,
+        site:            site,
+        yearMonth:       yearMonth,
         mimeType:   file.type.startsWith('image/') ? 'image/jpeg' : file.type,
         fileBase64: base64,
         fileName:   file.name,

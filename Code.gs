@@ -11,6 +11,7 @@ var SHEET_UNREGISTERED = '未登録ドライバー';
 
 var ALLOWED_MIME_TYPES_ = { 'image/jpeg': true, 'image/png': true, 'image/heic': true, 'image/heif': true, 'application/pdf': true };
 var MAX_BASE64_LEN_     = 20 * 1024 * 1024; // ~15MB 相当（base64は元サイズの約4/3）
+var LINE_PROFILE_URL_   = 'https://api.line.me/v2/profile';
 
 // ===== ルーティング =====
 
@@ -58,6 +59,7 @@ function doPost(e) {
 
 // 起動時に1回のリクエストでプロフィール＋提出履歴を返す
 function handleBootstrap(payload) {
+  try { verifyLineToken_(payload.lineAccessToken, payload.lineUserId); } catch(e) { return jsonResponse({ error: 'unauthorized' }); }
   var drivers = getDriversByUserId_(payload.lineUserId);
   if (!drivers.length) {
     saveUnregisteredDriver_(payload.lineUserId, payload.displayName || '');
@@ -109,12 +111,14 @@ function driverExistsInMaster_(userId) {
 }
 
 function handleGetProfile(payload) {
+  try { verifyLineToken_(payload.lineAccessToken, payload.lineUserId); } catch(e) { return jsonResponse({ error: 'unauthorized' }); }
   var driver = getDriverByUserId(payload.lineUserId);
   if (!driver) return jsonResponse({ error: 'unauthorized' });
   return jsonResponse({ driver: driver });
 }
 
 function handleUploadReport(payload) {
+  try { verifyLineToken_(payload.lineAccessToken, payload.lineUserId); } catch(e) { return jsonResponse({ error: 'unauthorized' }); }
   var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
   if (!driver) return jsonResponse({ error: 'unauthorized' });
 
@@ -212,6 +216,7 @@ function handleUploadReport(payload) {
 }
 
 function handleUploadAttachment(payload) {
+  try { verifyLineToken_(payload.lineAccessToken, payload.lineUserId); } catch(e) { return jsonResponse({ error: 'unauthorized' }); }
   var driver = getDriverByUserIdAndSite_(payload.lineUserId, payload.site || '');
   if (!driver) return jsonResponse({ error: 'unauthorized' });
 
@@ -256,6 +261,7 @@ function handleUploadAttachment(payload) {
 }
 
 function handleGetMyReports(payload) {
+  try { verifyLineToken_(payload.lineAccessToken, payload.lineUserId); } catch(e) { return jsonResponse({ error: 'unauthorized' }); }
   var drivers = getDriversByUserId_(payload.lineUserId);
   if (!drivers.length) return jsonResponse({ error: 'unauthorized' });
   return jsonResponse({ reports: getReportsByUserId_(drivers[0].lineUserId) });
@@ -405,6 +411,35 @@ function formatConsentAt_(isoStr) {
   } catch (e) {
     return isoStr;
   }
+}
+
+// LINEアクセストークンを検証し、確認済みuserIdを返す。不正なら例外を投げる。
+function verifyLineToken_(token, claimedUserId) {
+  if (!token) throw new Error('unauthorized');
+
+  // CacheService でトークンのMD5ハッシュをキーにキャッシュ（TTL 5分）
+  var cache = CacheService.getScriptCache();
+  var hash  = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, token)
+                .map(function(b) { return ('0' + (b & 0xff).toString(16)).slice(-2); })
+                .join('');
+  var cacheKey = 'line_' + hash;
+  var cached   = cache.get(cacheKey);
+  var userId   = cached;
+
+  if (!userId) {
+    var res = UrlFetchApp.fetch(LINE_PROFILE_URL_, {
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) throw new Error('unauthorized');
+    var profile = JSON.parse(res.getContentText());
+    userId = profile.userId;
+    if (!userId) throw new Error('unauthorized');
+    cache.put(cacheKey, userId, 300);
+  }
+
+  if (userId !== claimedUserId) throw new Error('unauthorized');
+  return userId;
 }
 
 function validateUploadPayload_(payload) {
