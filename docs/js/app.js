@@ -613,5 +613,13 @@ function showToast(msg) {
   el.textContent = msg;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() { el.classList.add('hidden'); }, 3000);
+  // 文字数に応じて表示時間を調整（最短4秒・最長10秒）
+  var duration = Math.min(10000, Math.max(4000, msg.length * 60));
+  toastTimer = setTimeout(function() { el.classList.add('hidden'); }, duration);
 }
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('toast').addEventListener('click', function() {
+    clearTimeout(toastTimer);
+    this.classList.add('hidden');
+  });
+});

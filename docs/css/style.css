@@ -256,11 +256,17 @@ body {
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 12px 24px;
-  border-radius: 100px;
+  padding: 14px 20px;
+  border-radius: 12px;
   font-size: 14px;
+  line-height: 1.6;
   z-index: 200;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  max-width: 88vw;
+  width: max-content;
+  word-break: break-all;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
 }
 .toast.hidden { display: none; }
 
