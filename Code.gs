@@ -117,6 +117,11 @@ function handleUploadReport(payload) {
 
   var yearMonth = payload.yearMonth;
   var site      = driver.site || '';
+
+  if (isMonthConfirmed_(driver.lineUserId, yearMonth, site)) {
+    return jsonResponse({ error: 'confirmed' });
+  }
+
   var mimeType  = payload.mimeType || 'image/jpeg';
   var base64    = payload.fileBase64;
   var uploadId  = payload.uploadId || '';
@@ -386,6 +391,21 @@ function formatConsentAt_(isoStr) {
   } catch (e) {
     return isoStr;
   }
+}
+
+function isMonthConfirmed_(lineUserId, yearMonth, site) {
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
+  var sheet = ss.getSheetByName(SHEET_MONTHLY);
+  if (!sheet) return false;
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === lineUserId &&
+        normalizeYearMonth_(data[i][3]) === yearMonth &&
+        (data[i][2] || '') === (site || '')) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function jsonResponse(data) {

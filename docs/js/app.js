@@ -348,7 +348,11 @@ function doSubmit(yearMonth) {
     })
     .catch(function(err) {
       showOverlay(false);
-      showToast('送信失敗: ' + err.message);
+      if (err.message === 'confirmed') {
+        showToast('この月の報告書はすでに確定済みです。変更が必要な場合は担当者へご連絡ください。');
+      } else {
+        showToast('送信失敗: ' + err.message);
+      }
     });
 }
 
