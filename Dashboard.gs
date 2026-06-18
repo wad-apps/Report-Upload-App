@@ -446,6 +446,14 @@ function handleAdminSaveDriver_(payload, email) {
 
   if (payload.isNew) {
     sheet.appendRow(rowValues);
+    // 未登録ドライバーシートから同一UIDの行を削除
+    var unregSheet = ss.getSheetByName(SHEET_UNREGISTERED);
+    if (unregSheet) {
+      var unregData = unregSheet.getDataRange().getValues();
+      for (var r = unregData.length - 1; r >= 1; r--) {
+        if (unregData[r][1] === uid) unregSheet.deleteRow(r + 1);
+      }
+    }
     appendAuditLog_(email, 'ドライバー追加', uid, payload.name || '', '', '', '', '');
   } else {
     var targetRow = -1;
