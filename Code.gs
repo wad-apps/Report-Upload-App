@@ -220,6 +220,11 @@ function handleUploadAttachment(payload) {
 
   var yearMonth = payload.yearMonth;
   var site      = driver.site || '';
+
+  if (isMonthConfirmed_(driver.lineUserId, yearMonth, site)) {
+    return jsonResponse({ error: 'confirmed' });
+  }
+
   var mimeType  = payload.mimeType || 'image/jpeg';
   var base64    = payload.fileBase64;
   var uploadId  = payload.uploadId || '';
