@@ -295,6 +295,7 @@ function handleAdminSaveCorrection_(payload, email) {
   corrections.forEach(function(c) { corrMap[c.day] = c; });
 
   var changeCount = 0;
+  var changes     = []; // 日別の変更内容を収集（ログ用）
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     // SHEET_OCR: [2]=site, [3]=yearMonth, [4]=day, [5]=ocrStart, [6]=ocrEnd, [7]=isWorking(col8), [8]=status(col9), [9]=fixedStart(col10), [10]=fixedEnd(col11)
@@ -315,12 +316,22 @@ function handleAdminSaveCorrection_(payload, email) {
     if (hasCorrection) sheet.getRange(i + 1, 9).setValue('修正済み');
     sheet.getRange(i + 1, 10).setValue(newFixedStart);
     sheet.getRange(i + 1, 11).setValue(newFixedEnd);
-    if (isChanged) changeCount++;
+    if (isChanged) {
+      changeCount++;
+      // 修正前: currentFixed（空ならOCR値）、修正後: newFixed（空ならOCR値へ戻したことを示す）
+      changes.push({
+        day:    row[4],
+        before: (currentFixedStart || ocrStart) + '-' + (currentFixedEnd || ocrEnd),
+        after:  (newFixedStart     || ocrStart) + '-' + (newFixedEnd     || ocrEnd),
+      });
+    }
   }
 
   SpreadsheetApp.flush();
   if (!silent && changeCount > 0) {
-    appendAuditLog_(email, '修正', lineUserId, driverName, yearMonth, '', changeCount + '件', '');
+    var beforeLog = changes.map(function(c) { return c.day + '日 ' + c.before; }).join(', ');
+    var afterLog  = changes.map(function(c) { return c.day + '日 ' + c.after;  }).join(', ');
+    appendAuditLog_(email, '修正', lineUserId, driverName, yearMonth, beforeLog, afterLog, '');
   }
   return jsonResponse({ status: 'ok' });
 }
@@ -362,9 +373,14 @@ function handleAdminConfirmMonth_(payload, email) {
       targetRow = i + 1; break;
     }
   }
+  // 再確定の場合は旧値をログ用に読んでおく
+  var beforeLog = targetRow > 0
+    ? '稼働' + monthData[targetRow - 1][4] + '日/¥' + monthData[targetRow - 1][8]
+    : '(新規確定)';
+
   var rowValues = [
     lineUserId, driver.name, site, yearMonth, workingDays,
-    totalMinutes, 0, driver.unitPrice, billingAmount, new Date()
+    totalMinutes, 0, driver.unitPrice, billingAmount, new Date(), computeClosingDate_(yearMonth)
   ];
   if (targetRow > 0) {
     monthSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
@@ -381,8 +397,34 @@ function handleAdminConfirmMonth_(payload, email) {
     }
   }
 
-  appendAuditLog_(email, '確定', lineUserId, driver.name, yearMonth, '', '稼働' + workingDays + '日/¥' + billingAmount, '');
+  appendAuditLog_(email, '確定', lineUserId, driver.name, yearMonth, beforeLog, '稼働' + workingDays + '日/¥' + billingAmount, '');
   return jsonResponse({ status: 'ok', workingDays: workingDays, billingAmount: billingAmount });
+}
+
+// ===== 締め日ヘルパー =====
+
+// yearMonth = 'YYYY-MM'。既定は月末締め。締め日ルールは税理士確認対象でここだけ差し替える。
+function computeClosingDate_(yearMonth) {
+  var p = String(yearMonth).split('-');
+  var y = parseInt(p[0], 10), m = parseInt(p[1], 10);
+  return new Date(y, m, 0); // m月の0日 = 当月末日
+}
+
+// 既存の確定済み行に締め日を一括補完する（一回限り実行）
+function backfillClosingDates_() {
+  var ss    = SpreadsheetApp.openById(getConfig_().sheetId);
+  var sheet = ss.getSheetByName(SHEET_MONTHLY);
+  var data  = sheet.getDataRange().getValues();
+  var count = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][10]) continue; // [10]=closingDate が既に入っている行はスキップ
+    var ym = normalizeYearMonth_(data[i][3]);
+    if (!ym) continue;
+    sheet.getRange(i + 1, 11).setValue(computeClosingDate_(ym));
+    count++;
+  }
+  SpreadsheetApp.flush();
+  Logger.log('backfillClosingDates_: ' + count + '件補完しました');
 }
 
 // ===== 集計データ出力 =====

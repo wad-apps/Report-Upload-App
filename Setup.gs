@@ -31,8 +31,8 @@ function setupSheets() {
     },
     {
       name: SHEET_MONTHLY,
-      // [0]uid [1]name [2]site [3]yearMonth [4]workingDays [5]totalMin [6]overMin [7]unitPrice [8]billingAmount [9]confirmedAt
-      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '稼働日数', '実働時間合計(分)', '超過時間合計(分)', '単価', '請求金額', '確定日時']
+      // [0]uid [1]name [2]site [3]yearMonth [4]workingDays [5]totalMin [6]overMin [7]unitPrice [8]billingAmount [9]confirmedAt [10]closingDate
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '稼働日数', '実働時間合計(分)', '超過時間合計(分)', '単価', '請求金額', '確定日時', '取引年月日(締め日)']
     },
     {
       name: SHEET_EXPENSE,
