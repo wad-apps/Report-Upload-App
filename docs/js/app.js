@@ -142,7 +142,9 @@ function uploadOriginal(yearMonth, file, uploadId) {
         fileBase64:      base64,
         fileName:        file.name,
         uploadId:        uploadId,
-      }).then(resolve).catch(reject);
+      }).then(function(res) {
+        if (res && res.error) { reject(new Error(res.error)); } else { resolve(res); }
+      }).catch(reject);
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -390,10 +392,12 @@ function doSubmit(yearMonth) {
   updateOverlayText('送信中...');
 
   var originalFailed = false;
+  var originalError  = '';
   var originalPromise = isPdf
     ? Promise.resolve()
-    : uploadOriginal(yearMonth, state.selectedFile, uploadId).catch(function() {
+    : uploadOriginal(yearMonth, state.selectedFile, uploadId).catch(function(err) {
         originalFailed = true;
+        originalError  = (err && err.message) ? err.message : String(err || '');
       });
 
   Promise.all([
@@ -418,7 +422,7 @@ function doSubmit(yearMonth) {
       else        { tagUrlEl.style.display = 'none'; }
       showScreen('done');
       if (originalFailed) {
-        showToast('原本ファイルの保存に失敗しました。担当者にお知らせください。');
+        showToast('原本ファイルの保存に失敗しました。\n' + (originalError || '担当者にお知らせください。'));
       }
     })
     .catch(function(err) {

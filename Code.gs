@@ -301,10 +301,14 @@ function handleUploadOriginal(payload) {
   var origName = payload.fileName || 'original';
   var fileName = uploadId ? (uploadId + '_原本_' + origName) : origName;
 
-  var result = saveOriginalToDrive_(driver, yearMonth, mimeType, base64, fileName);
-  updateOriginalFileId_(uploadId, result.fileId);
-
-  return jsonResponse({ status: 'ok', fileId: result.fileId });
+  try {
+    var result = saveOriginalToDrive_(driver, yearMonth, mimeType, base64, fileName);
+    updateOriginalFileId_(uploadId, result.fileId);
+    return jsonResponse({ status: 'ok', fileId: result.fileId });
+  } catch (e) {
+    Logger.log('handleUploadOriginal error: ' + e.message);
+    return jsonResponse({ error: 'save_failed: ' + e.message });
+  }
 }
 
 function saveOriginalToDrive_(driver, yearMonth, mimeType, base64, fileName) {
