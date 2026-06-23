@@ -21,6 +21,8 @@ function doGet(e) {
   switch (action) {
     case 'health':
       return jsonResponse({ status: 'ok', ts: new Date().toISOString() });
+    case 'smokeTest':
+      return handleSmokeTest_();
     default:
       return jsonResponse({ error: 'invalid action' });
   }
@@ -283,6 +285,43 @@ function getTagRedirectUrl_(yearMonth) {
   } catch (e) {
     return '';
   }
+}
+
+function handleSmokeTest_() {
+  var checks = [];
+  var allOk  = true;
+
+  // 1. スプレッドシート接続確認
+  try {
+    var ss = SpreadsheetApp.openById(getConfig_().sheetId);
+    var sheetNames = ss.getSheets().map(function(s) { return s.getName(); });
+    checks.push({ name: 'sheet', ok: true, sheets: sheetNames });
+  } catch (e) {
+    checks.push({ name: 'sheet', ok: false, error: e.message });
+    allOk = false;
+  }
+
+  // 2. タグURL検索（当月）
+  try {
+    var ym     = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
+    var tagUrl = getTagRedirectUrl_(ym);
+    checks.push({ name: 'tagUrl', ok: true, yearMonth: ym, found: tagUrl || '(なし)' });
+  } catch (e) {
+    checks.push({ name: 'tagUrl', ok: false, error: e.message });
+    allOk = false;
+  }
+
+  // 3. ドライバーマスタ件数
+  try {
+    var driverRows = SpreadsheetApp.openById(getConfig_().sheetId)
+      .getSheetByName(SHEET_DRIVER).getLastRow() - 1;
+    checks.push({ name: 'drivers', ok: true, count: driverRows });
+  } catch (e) {
+    checks.push({ name: 'drivers', ok: false, error: e.message });
+    allOk = false;
+  }
+
+  return jsonResponse({ ok: allOk, checks: checks });
 }
 
 function handleUploadOriginal(payload) {
