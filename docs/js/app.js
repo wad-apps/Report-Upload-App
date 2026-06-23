@@ -412,6 +412,10 @@ function doSubmit(yearMonth) {
       showOverlay(false);
       var ym = yearMonth.replace('-', '年') + '月';
       document.getElementById('done-message').textContent = ym + '分の月報を送信しました';
+      var tagUrlEl = document.getElementById('done-tag-url');
+      var tagUrl = state.tagRedirectUrl || TAG_REDIRECT_URL;
+      if (tagUrl) { tagUrlEl.textContent = '↩ 遷移先: ' + tagUrl; tagUrlEl.style.display = ''; }
+      else        { tagUrlEl.style.display = 'none'; }
       showScreen('done');
       if (originalFailed) {
         showToast('原本ファイルの保存に失敗しました。担当者にお知らせください。');
