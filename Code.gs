@@ -212,11 +212,15 @@ function handleUploadReport(payload) {
     Logger.log('OCR error: ' + ocrErr.message);
   }
 
+  var tagUrl = getTagRedirectUrl_(yearMonth);
   return jsonResponse({
-    status:      'ok',
-    fileId:      fileId,
-    fileUrl:     fileUrl,
-    workingDays: ocrResult ? ocrResult.workingDays : null,
+    status:         'ok',
+    fileId:         fileId,
+    fileUrl:        fileUrl,
+    workingDays:    ocrResult ? ocrResult.workingDays : null,
+    tagRedirectUrl: tagUrl,
+    _debug_tagYm:   yearMonth,
+    _debug_tagFound: tagUrl || '(なし)',
   });
 }
 
