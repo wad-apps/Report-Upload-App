@@ -38,6 +38,49 @@ var OCR_PROMPT_META = [
   '- JSONブロックのみを返し説明文は不要',
 ].join('\n');
 
+var OCR_PROMPT_VALIDATION = [
+  'この画像（またはPDF）が月次稼働報告書（月報）であるかどうかを判定してください。',
+  '',
+  '次のJSON形式のみで返してください:',
+  '{"isReport":true,"canRead":true,"reason":null}',
+  '',
+  '- isReport: 日別稼働時間を記録した月次帳票であればtrue。レシート・名刺・無関係な書類などはfalse',
+  '- canRead: 文字が判読できる状態であればtrue。真っ暗・ピンぼけ・白飛びなど内容が読み取れない場合はfalse',
+  '- reason: isReport=falseまたはcanRead=falseのとき、理由を日本語で簡潔に（例: "レシートの写真です"）。問題なければnull',
+  '- JSONブロックのみを返し説明文は不要',
+].join('\n');
+
+// base64/mimeType の画像またはPDFが月報かつ判読可能かを軽量判定。
+// 失敗時は { isReport:true, canRead:true, reason:null } にフォールバック（提出ブロックを避ける）。
+function runReportValidation_(base64, mimeType) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
+  if (!apiKey) return { isReport: true, canRead: true, reason: null };
+  try {
+    var results = callClaudeApiBatch_(apiKey, [
+      { base64: base64, mimeType: mimeType || 'image/jpeg', prompt: OCR_PROMPT_VALIDATION },
+    ]);
+    return parseValidationResult_(results[0]);
+  } catch (e) {
+    Logger.log('runReportValidation_ error: ' + e.message);
+    return { isReport: true, canRead: true, reason: null };
+  }
+}
+
+function parseValidationResult_(text) {
+  var match = text.match(/\{[\s\S]*?\}/);
+  if (!match) return { isReport: true, canRead: true, reason: null };
+  try {
+    var parsed = JSON.parse(match[0]);
+    return {
+      isReport: parsed.isReport !== false,
+      canRead:  parsed.canRead  !== false,
+      reason:   parsed.reason   || null,
+    };
+  } catch (e) {
+    return { isReport: true, canRead: true, reason: null };
+  }
+}
+
 // ===== メイン関数 =====
 
 // Code.gsのhandleUploadReportから呼ばれる

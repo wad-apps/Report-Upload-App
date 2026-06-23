@@ -22,8 +22,8 @@ function setupSheets() {
     },
     {
       name: SHEET_OCR,
-      // [0]uid [1]name [2]site [3]yearMonth [4]day [5]start [6]end [7]isWorking [8]status [9]fixedStart [10]fixedEnd [11]fileId [12]uploadId
-      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '日', '開始時間', '終了時間', '稼働フラグ', '確認ステータス', '修正後開始時間', '修正後終了時間', '受信ファイルID', 'アップロードID']
+      // [0]uid [1]name [2]site [3]yearMonth [4]day [5]start [6]end [7]isWorking [8]status [9]fixedStart [10]fixedEnd [11]fileId [12]uploadId [13]kosu [14]distance [15]fixedKosu [16]fixedDistance
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '日', '開始時間', '終了時間', '稼働フラグ', '確認ステータス', '修正後開始時間', '修正後終了時間', '受信ファイルID', 'アップロードID', '個数', '走行距離(km)', '修正後個数', '修正後走行距離']
     },
     {
       name: SHEET_DRIVER,
@@ -31,8 +31,8 @@ function setupSheets() {
     },
     {
       name: SHEET_MONTHLY,
-      // [0]uid [1]name [2]site [3]yearMonth [4]workingDays [5]totalMin [6]overMin [7]unitPrice [8]billingAmount [9]confirmedAt [10]closingDate
-      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '稼働日数', '実働時間合計(分)', '超過時間合計(分)', '単価', '請求金額', '確定日時', '取引年月日(締め日)']
+      // [0]uid [1]name [2]site [3]yearMonth [4]workingDays [5]totalMin [6]overMin [7]unitPrice [8]billingAmount [9]confirmedAt [10]closingDate [11]totalKosu [12]totalDistance [13]totalOverKm
+      headers: ['LINEユーザーID', 'ドライバー名', '現場名', '年月', '稼働日数', '実働時間合計(分)', '超過時間合計(分)', '単価', '請求金額', '確定日時', '取引年月日(締め日)', '個数合計', '走行距離合計(km)', '超過km合計']
     },
     {
       name: SHEET_EXPENSE,

@@ -5,6 +5,14 @@ var TAG_REDIRECT_URL = window.APP_CONFIG.TAG_REDIRECT_URL;
 var MAX_FILE_BYTES   = window.APP_CONFIG.MAX_FILE_BYTES;
 var MAX_TOTAL_BYTES  = window.APP_CONFIG.MAX_TOTAL_BYTES;
 
+// ===== 画像品質チェック閾値（実機検証で調整可） =====
+var IMG_CHECK_CFG = {
+  minLongEdge:   800,  // 長辺の最低px数
+  brightnessMin:  30,  // 輝度下限（暗すぎ）
+  brightnessMax: 240,  // 輝度上限（白飛び）
+  blurVarMin:     50,  // ラプラシアン分散の最低値（ぼけ判定）
+};
+
 // ===== 状態 =====
 var state = {
   lineUserId:       null,
@@ -149,6 +157,98 @@ function uploadOriginal(yearMonth, file, uploadId) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// ===== 画像品質チェック =====
+// Canvas で画像をデコードし、解像度・明るさ・ぼけを判定して { ok, reason, message } を返す。
+// デコード失敗は { ok:false, reason:'decode', message:... }
+// サンプリング: 最大 200x200 に縮小して高速化
+function checkImageQuality_(file) {
+  return new Promise(function(resolve) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var w = img.width, h = img.height;
+
+      // 1. 解像度チェック
+      if (Math.max(w, h) < IMG_CHECK_CFG.minLongEdge) {
+        resolve({ ok: false, reason: 'resolution', message: '画像が小さすぎます。もう一度撮影してください' });
+        return;
+      }
+
+      // サンプリング用に縮小して Canvas に描画
+      var SAMPLE = 200;
+      var scale  = Math.min(1, SAMPLE / Math.max(w, h));
+      var sw = Math.max(1, Math.round(w * scale));
+      var sh = Math.max(1, Math.round(h * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = sw; canvas.height = sh;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, sw, sh);
+      var pixelData = ctx.getImageData(0, 0, sw, sh).data;
+
+      // 2. 輝度チェック
+      var total = 0, count = 0;
+      for (var i = 0; i < pixelData.length; i += 4) {
+        total += (pixelData[i] + pixelData[i + 1] + pixelData[i + 2]) / 3;
+        count++;
+      }
+      var brightness = count > 0 ? Math.round(total / count) : 128;
+      if (brightness < IMG_CHECK_CFG.brightnessMin) {
+        resolve({ ok: false, reason: 'dark', message: '暗すぎます。明るい場所で撮り直してください' });
+        return;
+      }
+      if (brightness > IMG_CHECK_CFG.brightnessMax) {
+        resolve({ ok: false, reason: 'bright', message: '白飛びしています。明るさを調整して撮り直してください' });
+        return;
+      }
+
+      // 3. ぼけチェック（ラプラシアン分散）
+      var laps = [];
+      for (var y = 1; y < sh - 1; y++) {
+        for (var x = 1; x < sw - 1; x++) {
+          var g = function(px, py) {
+            var idx = (py * sw + px) * 4;
+            return (pixelData[idx] + pixelData[idx + 1] + pixelData[idx + 2]) / 3;
+          };
+          laps.push(-4 * g(x, y) + g(x-1,y) + g(x+1,y) + g(x,y-1) + g(x,y+1));
+        }
+      }
+      var mean = laps.reduce(function(s, v) { return s + v; }, 0) / (laps.length || 1);
+      var variance = laps.reduce(function(s, v) { return s + (v - mean) * (v - mean); }, 0) / (laps.length || 1);
+      if (variance < IMG_CHECK_CFG.blurVarMin) {
+        resolve({ ok: false, reason: 'blur', message: 'ピントが合っていません。撮り直してください' });
+        return;
+      }
+
+      resolve({ ok: true });
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      resolve({ ok: false, reason: 'decode', message: 'この写真は読み込めませんでした。カメラで撮り直すか、別の形式で保存して選び直してください' });
+    };
+    img.src = url;
+  });
+}
+
+// フォールバック確認ダイアログ（品質NG でも続行できるようにする）
+function showQualityWarning_(message, onContinue, onRetake) {
+  var el = document.getElementById('quality-warning');
+  if (!el) {
+    onContinue(); // HTML要素が無い場合は警告なしで続行
+    return;
+  }
+  document.getElementById('quality-warning-msg').textContent = message;
+  el.classList.remove('hidden');
+  document.getElementById('btn-quality-continue').onclick = function() {
+    el.classList.add('hidden');
+    onContinue();
+  };
+  document.getElementById('btn-quality-retake').onclick = function() {
+    el.classList.add('hidden');
+    onRetake();
+  };
 }
 
 // 画像の向きを判定して分割し、フル + 前半 + 後半 の base64 を返す
@@ -318,13 +418,31 @@ function handleFileSelected(file) {
   if (file.type.startsWith('image/')) {
     img.src = URL.createObjectURL(file);
     img.classList.remove('hidden');
-    // バックグラウンドで分割処理を先行実行（送信時に待ち時間ゼロにする）
-    splitForOcr(file).then(function(halves) {
-      if (state.selectedFile === file) {
-        state.splitResult    = halves;
-        state.splitResultFor = file;
+    // 品質チェック → NG なら警告（続行可能） → OKなら分割処理
+    checkImageQuality_(file).then(function(result) {
+      if (state.selectedFile !== file) return; // 別ファイルが選択済みなら無視
+      var proceed = function() {
+        splitForOcr(file).then(function(halves) {
+          if (state.selectedFile === file) {
+            state.splitResult    = halves;
+            state.splitResultFor = file;
+          }
+        }).catch(function() {});
+      };
+      if (result.ok) {
+        proceed();
+      } else {
+        showQualityWarning_(result.message, proceed, clearFileSelection);
       }
-    }).catch(function() {});
+    }).catch(function() {
+      // チェック自体が失敗した場合は通過させる（過剰なブロックを避ける）
+      splitForOcr(file).then(function(halves) {
+        if (state.selectedFile === file) {
+          state.splitResult    = halves;
+          state.splitResultFor = file;
+        }
+      }).catch(function() {});
+    });
   } else {
     img.classList.add('hidden');
   }
@@ -393,6 +511,7 @@ function doSubmit(yearMonth) {
 
   var originalFailed = false;
   var originalError  = '';
+  var reportRes      = null;
   var originalPromise = isPdf
     ? Promise.resolve()
     : uploadOriginal(yearMonth, state.selectedFile, uploadId).catch(function(err) {
@@ -402,6 +521,7 @@ function doSubmit(yearMonth) {
 
   Promise.all([
     uploadReport(yearMonth, state.selectedFile, uploadId).then(function(res) {
+      reportRes = res;
       if (res && res.tagRedirectUrl) state.tagRedirectUrl = res.tagRedirectUrl;
       return res;
     }),
@@ -419,6 +539,9 @@ function doSubmit(yearMonth) {
       showScreen('done');
       if (originalFailed) {
         showToast('原本ファイルの保存に失敗しました。\n' + (originalError || '担当者にお知らせください。'));
+      } else if (reportRes && reportRes.validationWarning) {
+        var base = '月報として認識できなかった可能性があります。問題がなければそのままお待ちください。';
+        showToast(reportRes.validationReason ? base + '\n（' + reportRes.validationReason + '）' : base);
       }
     })
     .catch(function(err) {

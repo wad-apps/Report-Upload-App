@@ -73,7 +73,14 @@ function handleAdminGetOverview_(payload) {
     else if (row[8] === 'OCRエラー') stats.ocrError++;
   });
 
-  return jsonResponse({ stats: stats, yearMonth: yearMonth });
+  // 月次確定から超過km合計を集計。SHEET_MONTHLY: [3]=yearMonth, [13]=totalOverKm
+  var monthlyData  = ss.getSheetByName(SHEET_MONTHLY).getDataRange().getValues();
+  var totalOverKm  = 0;
+  monthlyData.slice(1).forEach(function(row) {
+    if (normalizeYearMonth_(row[3]) === yearMonth) totalOverKm += sheetValueToNumber_(row[13]);
+  });
+
+  return jsonResponse({ stats: stats, yearMonth: yearMonth, totalOverKm: totalOverKm });
 }
 
 // ===== ドライバー別提出状況一覧 =====
@@ -134,12 +141,17 @@ function handleAdminGetDriverList_(payload) {
     if (isWorking) workingDaysMap[key] = (workingDaysMap[key] || 0) + 1;
   });
 
-  // 月次確定データ。SHEET_MONTHLY: [2]=site, [3]=yearMonth, [8]=billingAmount
+  // 月次確定データ。SHEET_MONTHLY: [2]=site, [3]=yearMonth, [8]=billingAmount, [11]=totalKosu, [12]=totalDistance, [13]=totalOverKm
   var confirmedMap = {};
   monthlyData.slice(1).forEach(function(row) {
     if (normalizeYearMonth_(row[3]) === yearMonth) {
       var site = row[2] || '';
-      confirmedMap[row[0] + '|' + site] = { billingAmount: sheetValueToNumber_(row[8]) };
+      confirmedMap[row[0] + '|' + site] = {
+        billingAmount: sheetValueToNumber_(row[8]),
+        totalKosu:     sheetValueToNumber_(row[11]),
+        totalDistance: sheetValueToNumber_(row[12]),
+        totalOverKm:   sheetValueToNumber_(row[13]),
+      };
     }
   });
 
@@ -165,6 +177,9 @@ function handleAdminGetDriverList_(payload) {
       workingDays:    wd,
       billingAmount:  confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
       isConfirmed:    !!confirmedMap[key],
+      totalKosu:      confirmedMap[key] ? confirmedMap[key].totalKosu     : 0,
+      totalDistance:  confirmedMap[key] ? confirmedMap[key].totalDistance : 0,
+      totalOverKm:    confirmedMap[key] ? confirmedMap[key].totalOverKm   : 0,
       folderUrl:      sub.folderUrl || folderUrlMap[folderName] || '',
       originalFileId: sub.originalFileId || '',
     };
@@ -189,11 +204,19 @@ function handleAdminGetOcrDetail_(payload) {
   var site       = payload.site || '';
   var ss         = SpreadsheetApp.openById(getConfig_().sheetId);
 
-  // SHEET_OCR: [0]=uid, [2]=site, [3]=yearMonth, [4]=day, [5]=start, [6]=end, [7]=isWorking, [8]=status, [9]=fixedStart, [10]=fixedEnd
+  // SHEET_OCR: [0]=uid, [2]=site, [3]=yearMonth, [4]=day, [5]=start, [6]=end, [7]=isWorking, [8]=status,
+  //            [9]=fixedStart, [10]=fixedEnd, [11]=fileId, [12]=uploadId,
+  //            [13]=ocrKosu, [14]=ocrDistance, [15]=fixedKosu, [16]=fixedDistance
   var ocrData = ss.getSheetByName(SHEET_OCR).getDataRange().getValues();
   var days = [];
   ocrData.slice(1).forEach(function(row) {
     if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) return;
+    var fixedKosu     = (row[15] !== null && row[15] !== '') ? row[15] : null;
+    var ocrKosu       = (row[13] !== null && row[13] !== '') ? row[13] : null;
+    var fixedDistance = (row[16] !== null && row[16] !== '') ? row[16] : null;
+    var ocrDistance   = (row[14] !== null && row[14] !== '') ? row[14] : null;
+    var kosu          = fixedKosu     != null ? sheetValueToNumber_(fixedKosu)     : (ocrKosu     != null ? sheetValueToNumber_(ocrKosu)     : 0);
+    var distance      = fixedDistance != null ? sheetValueToNumber_(fixedDistance) : (ocrDistance != null ? sheetValueToNumber_(ocrDistance) : 0);
     days.push({
       day:        row[4],
       start:      normalizeTime_(row[5]),
@@ -202,6 +225,9 @@ function handleAdminGetOcrDetail_(payload) {
       status:     row[8],
       fixedStart: normalizeTime_(row[9]),
       fixedEnd:   normalizeTime_(row[10]),
+      kosu:       kosu,
+      distance:   distance,
+      overKm:     calcDailyOverKm_(distance),
     });
   });
   days.sort(function(a, b) { return a.day - b.day; });
@@ -281,7 +307,7 @@ function handleAdminSaveCorrection_(payload, email) {
   var lineUserId  = payload.lineUserId;
   var yearMonth   = payload.yearMonth;
   var site        = payload.site || '';
-  var corrections = payload.corrections; // [{ day, fixedStart, fixedEnd }]
+  var corrections = payload.corrections; // [{ day, fixedStart, fixedEnd, fixedKosu?, fixedDistance? }]
   var silent      = !!payload.silent;   // trueのとき操作ログを記録しない（確定前の自動保存用）
 
   var driver     = getDriverByUserIdAndSite_(lineUserId, site);
@@ -309,16 +335,27 @@ function handleAdminSaveCorrection_(payload, email) {
     var newFixedEnd   = c.fixedEnd   !== ocrEnd   ? c.fixedEnd   : '';
     var currentFixedStart = normalizeTime_(row[9]);
     var currentFixedEnd   = normalizeTime_(row[10]);
-    var isChanged     = (newFixedStart !== currentFixedStart || newFixedEnd !== currentFixedEnd);
-    var hasCorrection = (newFixedStart !== '' || newFixedEnd !== '');
+
+    // 個数・走行距離の修正値決定（OCRと同値なら空=修正なし）
+    var ocrKosu          = (row[13] !== null && row[13] !== '') ? sheetValueToNumber_(row[13]) : undefined;
+    var ocrDistance      = (row[14] !== null && row[14] !== '') ? sheetValueToNumber_(row[14]) : undefined;
+    var fk               = (c.fixedKosu     !== undefined && c.fixedKosu     !== null) ? c.fixedKosu     : undefined;
+    var fd               = (c.fixedDistance !== undefined && c.fixedDistance !== null) ? c.fixedDistance : undefined;
+    var newFixedKosu     = (fk !== undefined && fk !== ocrKosu)     ? fk : '';
+    var newFixedDistance = (fd !== undefined && fd !== ocrDistance)  ? fd : '';
+
+    var isChanged     = (newFixedStart !== currentFixedStart || newFixedEnd !== currentFixedEnd
+                         || newFixedKosu !== (row[15] !== '' ? sheetValueToNumber_(row[15]) : '')
+                         || newFixedDistance !== (row[16] !== '' ? sheetValueToNumber_(row[16]) : ''));
+    var hasCorrection = (newFixedStart !== '' || newFixedEnd !== '' || newFixedKosu !== '' || newFixedDistance !== '');
     sheet.getRange(i + 1, 8).setValue(isWorking);
-    // '修正済み' は保存値が空でない行にのみ付与（全行に付かないように）
     if (hasCorrection) sheet.getRange(i + 1, 9).setValue('修正済み');
     sheet.getRange(i + 1, 10).setValue(newFixedStart);
     sheet.getRange(i + 1, 11).setValue(newFixedEnd);
+    sheet.getRange(i + 1, 16).setValue(newFixedKosu);     // [15] fixedKosu → col16
+    sheet.getRange(i + 1, 17).setValue(newFixedDistance); // [16] fixedDistance → col17
     if (isChanged) {
       changeCount++;
-      // 修正前: currentFixed（空ならOCR値）、修正後: newFixed（空ならOCR値へ戻したことを示す）
       changes.push({
         day:    row[4],
         before: (currentFixedStart || ocrStart) + '-' + (currentFixedEnd || ocrEnd),
@@ -349,8 +386,12 @@ function handleAdminConfirmMonth_(payload, email) {
   var ocrData = ss.getSheetByName(SHEET_OCR).getDataRange().getValues();
 
   // SHEET_OCR: [2]=site, [3]=yearMonth, [5]=ocrStart, [6]=ocrEnd, [9]=fixedStart, [10]=fixedEnd
-  var workingDays  = 0;
-  var totalMinutes = 0;
+  //            [13]=ocrKosu, [14]=ocrDistance, [15]=fixedKosu, [16]=fixedDistance
+  var workingDays   = 0;
+  var totalMinutes  = 0;
+  var totalKosu     = 0;
+  var totalDistance = 0;
+  var totalOverKm   = 0;
   ocrData.slice(1).forEach(function(row) {
     if (row[0] !== lineUserId || normalizeYearMonth_(row[3]) !== yearMonth || (row[2] || '') !== site) return;
     var startStr = normalizeTime_(row[9]) || normalizeTime_(row[5]);
@@ -360,6 +401,11 @@ function handleAdminConfirmMonth_(payload, email) {
     var s = timeToMinutes_(startStr);
     var e = timeToMinutes_(endStr);
     if (s !== null && e !== null && e > s) totalMinutes += e - s;
+    var dist = (row[16] !== null && row[16] !== '') ? sheetValueToNumber_(row[16]) : sheetValueToNumber_(row[14]);
+    var kosu = (row[15] !== null && row[15] !== '') ? sheetValueToNumber_(row[15]) : sheetValueToNumber_(row[13]);
+    totalDistance += dist;
+    totalKosu     += kosu;
+    totalOverKm   += calcDailyOverKm_(dist);
   });
 
   var billingAmount = workingDays * (driver.unitPrice || 0);
@@ -380,7 +426,8 @@ function handleAdminConfirmMonth_(payload, email) {
 
   var rowValues = [
     lineUserId, driver.name, site, yearMonth, workingDays,
-    totalMinutes, 0, driver.unitPrice, billingAmount, new Date(), computeClosingDate_(yearMonth)
+    totalMinutes, 0, driver.unitPrice, billingAmount, new Date(), computeClosingDate_(yearMonth),
+    totalKosu, totalDistance, totalOverKm
   ];
   if (targetRow > 0) {
     monthSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
@@ -434,7 +481,7 @@ function handleAdminExportData_(payload) {
   var ss          = SpreadsheetApp.openById(getConfig_().sheetId);
   var monthlyData = ss.getSheetByName(SHEET_MONTHLY).getDataRange().getValues();
 
-  // SHEET_MONTHLY: [1]=name, [2]=site, [3]=yearMonth, [4]=workingDays, [5]=totalMin, [7]=unitPrice, [8]=billingAmount, [9]=confirmedAt
+  // SHEET_MONTHLY: [1]=name, [2]=site, [3]=yearMonth, [4]=workingDays, [5]=totalMin, [7]=unitPrice, [8]=billingAmount, [9]=confirmedAt, [11]=totalKosu, [12]=totalDistance, [13]=totalOverKm
   var rows = monthlyData.slice(1)
     .filter(function(row) { return normalizeYearMonth_(row[3]) === yearMonth; })
     .map(function(row) {
@@ -447,6 +494,9 @@ function handleAdminExportData_(payload) {
         unitPrice:     sheetValueToNumber_(row[7]),
         billingAmount: sheetValueToNumber_(row[8]),
         confirmedAt:   row[9] ? Utilities.formatDate(new Date(row[9]), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : '',
+        totalKosu:     sheetValueToNumber_(row[11]),
+        totalDistance: sheetValueToNumber_(row[12]),
+        totalOverKm:   sheetValueToNumber_(row[13]),
       };
     });
 
@@ -652,6 +702,16 @@ function timeToMinutes_(timeStr) {
   if (isNaN(h) || isNaN(m)) return null;
   return h * 60 + m;
 }
+
+// ===== 超過km計算ヘルパー =====
+
+var OVER_KM_THRESHOLD_ = 100; // 日別超過km閾値（定数化して運用調整可）
+
+function calcDailyOverKm_(distance) {
+  return Math.max(0, (distance || 0) - OVER_KM_THRESHOLD_);
+}
+
+// ===== 数値変換ヘルパー =====
 
 // Sheets が数値セルを Date 型で返すことがある（シリアル番号 → 日付自動変換）ため数値に戻す
 // Sheets エポック: 1899-12-30

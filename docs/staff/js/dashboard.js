@@ -135,8 +135,10 @@ function loadDashboard(force) {
 
   adminPost({ action: 'adminGetDriverList', idToken: state.idToken, yearMonth: ym })
     .then(function(res) {
-      cachedListData = { drivers: res.drivers, stats: res.stats, yearMonth: ym };
-      renderStats(res.stats);
+      var totalOverKm = (res.drivers || []).reduce(function(sum, d) { return sum + (d.totalOverKm || 0); }, 0);
+      var enrichedStats = Object.assign({}, res.stats, { totalOverKm: totalOverKm });
+      cachedListData = { drivers: res.drivers, stats: enrichedStats, yearMonth: ym };
+      renderStats(enrichedStats);
       renderDriverTable(res.drivers);
     }).catch(function() {});
 }
@@ -147,22 +149,26 @@ function renderStats(stats) {
   document.getElementById('stat-pending').textContent   = stats.pending;
   document.getElementById('stat-confirmed').textContent = stats.confirmed;
   document.getElementById('stat-error').textContent     = stats.ocrError;
+  document.getElementById('stat-over-km').textContent   = (stats.totalOverKm != null ? stats.totalOverKm : '-') + (stats.totalOverKm != null ? ' km' : '');
 }
 
 // ===== ドライバー一覧レンダリング =====
 function renderDriverTable(drivers) {
   var tbody = document.getElementById('driver-tbody');
   if (!drivers.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">この月の提出データはありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-cell">この月の提出データはありません</td></tr>';
     return;
   }
 
   tbody.innerHTML = drivers.map(function(d) {
-    var badgeClass  = 'badge-' + d.status;
-    var billingText = d.billingAmount ? '¥' + d.billingAmount.toLocaleString() : '-';
-    var ocrTime     = d.ocrTime || '-';
-    var btnLabel    = d.isConfirmed ? '確認済み' : '確認する';
-    var btnDisabled = d.status !== '確認待ち' && d.status !== '確定' ? 'disabled' : '';
+    var badgeClass   = 'badge-' + d.status;
+    var billingText  = d.billingAmount ? '¥' + d.billingAmount.toLocaleString() : '-';
+    var ocrTime      = d.ocrTime || '-';
+    var btnLabel     = d.isConfirmed ? '確認済み' : '確認する';
+    var btnDisabled  = d.status !== '確認待ち' && d.status !== '確定' ? 'disabled' : '';
+    var distText     = d.isConfirmed && d.totalDistance ? d.totalDistance + ' km' : '-';
+    var overKmText   = d.isConfirmed && d.totalOverKm   ? d.totalOverKm   + ' km' : '-';
+    var overKmStyle  = d.isConfirmed && d.totalOverKm > 0 ? ' style="color:var(--warning);font-weight:600"' : '';
     var fileLink     = d.fileUrl
       ? '<a href="' + escHtml(d.fileUrl) + '" target="_blank" class="btn btn-sm btn-ghost">画像 ↗</a>'
       : '';
@@ -178,6 +184,8 @@ function renderDriverTable(drivers) {
       '<td>' + escHtml(d.site) + '</td>',
       '<td>' + (d.workingDays || '-') + ' 日</td>',
       '<td>' + billingText + '</td>',
+      '<td>' + distText + '</td>',
+      '<td' + overKmStyle + '>' + overKmText + '</td>',
       '<td><span class="badge ' + badgeClass + '">' + d.status + '</span></td>',
       '<td style="color:var(--text-sub);font-size:12px">' + ocrTime + '</td>',
       '<td style="display:flex;gap:6px;align-items:center">' + fileLink + originalLink + folderLink +
@@ -268,23 +276,50 @@ function renderOcrTable(days, driver) {
     var dotClass      = isWorking ? 'yes' : 'no';
     var startModified = (d.fixedStart && d.fixedStart !== d.start) ? ' modified' : '';
     var endModified   = (d.fixedEnd   && d.fixedEnd   !== d.end)   ? ' modified' : '';
+    var dist          = d.distance || 0;
+    var overKm        = d.overKm   || 0;
+    var rowClass      = dist > 100 ? ' class="over-km-row"' : '';
+    var overKmCell    = overKm > 0
+      ? '<span class="over-km-badge">+' + overKm + '</span>'
+      : '<span style="color:var(--text-sub)">-</span>';
     return [
-      '<tr>',
+      '<tr' + rowClass + '>',
       '<td style="font-weight:600;color:var(--text-sub)">' + d.day + '</td>',
       '<td><input type="text" class="time-input' + startModified + '" data-day="' + d.day + '" data-field="start"' +
           ' value="' + displayStart + '" placeholder="--:--"></td>',
       '<td><input type="text" class="time-input' + endModified   + '" data-day="' + d.day + '" data-field="end"' +
           ' value="' + displayEnd + '" placeholder="--:--"></td>',
+      '<td><input type="number" class="km-input" data-day="' + d.day + '" data-field="kosu"' +
+          ' value="' + (d.kosu || '') + '" min="0" placeholder="-"></td>',
+      '<td><input type="number" class="km-input" data-day="' + d.day + '" data-field="distance"' +
+          ' value="' + (dist || '') + '" min="0" placeholder="-"></td>',
+      '<td style="text-align:right">' + overKmCell + '</td>',
       '<td><span class="working-dot ' + dotClass + '"></span></td>',
       '</tr>',
     ].join('');
   }).join('');
 
-  // 入力変更時に稼働ドットと集計をリアルタイム更新
+  // 入力変更時に稼働ドット・集計・超過kmハイライトをリアルタイム更新
   tbody.querySelectorAll('.time-input').forEach(function(input) {
     input.addEventListener('input', function() {
       input.classList.add('modified');
       updateOcrSummary(unitPrice);
+    });
+  });
+  tbody.querySelectorAll('.km-input[data-field="distance"]').forEach(function(input) {
+    input.addEventListener('input', function() {
+      updateOcrSummary(unitPrice);
+      var row  = input.closest('tr');
+      var dist = parseFloat(input.value) || 0;
+      var overKm = Math.max(0, dist - 100);
+      var overCell = row.cells[5];
+      if (dist > 100) {
+        row.classList.add('over-km-row');
+        overCell.innerHTML = '<span class="over-km-badge">+' + overKm + '</span>';
+      } else {
+        row.classList.remove('over-km-row');
+        overCell.innerHTML = '<span style="color:var(--text-sub)">-</span>';
+      }
     });
   });
 
@@ -294,20 +329,26 @@ function renderOcrTable(days, driver) {
 }
 
 function updateOcrSummary(unitPrice) {
-  var rows      = document.querySelectorAll('#ocr-tbody tr');
-  var working   = 0;
+  var rows          = document.querySelectorAll('#ocr-tbody tr');
+  var working       = 0;
+  var totalDistance = 0;
+  var totalOverKm   = 0;
   rows.forEach(function(row) {
     var startInput = row.querySelector('[data-field="start"]');
+    var distInput  = row.querySelector('[data-field="distance"]');
     var dotEl      = row.querySelector('.working-dot');
     if (!startInput) return;
     var isWorking = startInput.value.trim() !== '';
     if (isWorking) working++;
-    if (dotEl) {
-      dotEl.className = 'working-dot ' + (isWorking ? 'yes' : 'no');
-    }
+    if (dotEl) dotEl.className = 'working-dot ' + (isWorking ? 'yes' : 'no');
+    var dist = distInput ? (parseFloat(distInput.value) || 0) : 0;
+    totalDistance += dist;
+    totalOverKm   += Math.max(0, dist - 100);
   });
-  document.getElementById('ocr-working-days').textContent = working;
-  document.getElementById('ocr-billing').textContent = '¥' + (working * unitPrice).toLocaleString();
+  document.getElementById('ocr-working-days').textContent    = working;
+  document.getElementById('ocr-billing').textContent         = '¥' + (working * unitPrice).toLocaleString();
+  document.getElementById('ocr-total-distance').textContent  = totalDistance || '-';
+  document.getElementById('ocr-total-over-km').textContent   = totalOverKm   || '-';
 }
 
 function renderExpenses(expenses) {
@@ -354,11 +395,15 @@ function handleSaveCorrection(silent) {
   document.querySelectorAll('#ocr-tbody tr').forEach(function(row) {
     var startInput = row.querySelector('[data-field="start"]');
     var endInput   = row.querySelector('[data-field="end"]');
+    var kosuInput  = row.querySelector('[data-field="kosu"]');
+    var distInput  = row.querySelector('[data-field="distance"]');
     if (!startInput) return;
     corrections.push({
-      day:        parseInt(startInput.dataset.day, 10),
-      fixedStart: startInput.value.trim(),
-      fixedEnd:   endInput.value.trim(),
+      day:           parseInt(startInput.dataset.day, 10),
+      fixedStart:    startInput.value.trim(),
+      fixedEnd:      endInput.value.trim(),
+      fixedKosu:     kosuInput  ? (parseFloat(kosuInput.value)  || 0) : 0,
+      fixedDistance: distInput  ? (parseFloat(distInput.value)  || 0) : 0,
     });
   });
 
@@ -430,7 +475,7 @@ function handleExport() {
 function renderExportTable(rows) {
   var tbody = document.getElementById('export-tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">確定済みデータはありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-cell">確定済みデータはありません</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(function(r) {
@@ -442,6 +487,9 @@ function renderExportTable(rows) {
       '<td>' + r.totalHours + '</td>',
       '<td>¥' + (r.unitPrice || 0).toLocaleString() + '</td>',
       '<td>¥' + (r.billingAmount || 0).toLocaleString() + '</td>',
+      '<td>' + (r.totalKosu || 0) + '</td>',
+      '<td>' + (r.totalDistance || 0) + '</td>',
+      '<td>' + (r.totalOverKm || 0) + '</td>',
       '</tr>',
     ].join('');
   }).join('');
@@ -450,16 +498,19 @@ function renderExportTable(rows) {
 function downloadCsv() {
   if (!state.exportData) return;
   var rows    = state.exportData;
-  var headers = ['ドライバー名', '現場', '稼働日数', '実働時間(h)', '単価', '請求金額', '確定日時'];
+  var headers = ['ドライバー名', '現場', '稼働日数', '実働時間(h)', '単価', '請求金額', '個数合計', '走行距離合計(km)', '超過km合計', '確定日時'];
   var csv     = [headers.join(',')];
   rows.forEach(function(r) {
     csv.push([
       '"' + (r.driverName    || '') + '"',
       '"' + (r.site          || '') + '"',
-      r.workingDays  || 0,
-      r.totalHours   || 0,
-      r.unitPrice    || 0,
-      r.billingAmount || 0,
+      r.workingDays    || 0,
+      r.totalHours     || 0,
+      r.unitPrice      || 0,
+      r.billingAmount  || 0,
+      r.totalKosu      || 0,
+      r.totalDistance  || 0,
+      r.totalOverKm    || 0,
       '"' + (r.confirmedAt   || '') + '"',
     ].join(','));
   });
