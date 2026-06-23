@@ -262,7 +262,8 @@ function handleUploadAttachment(payload) {
     uploadId,           // [9] アップロードID
   ]);
 
-  return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl, tagRedirectUrl: getTagRedirectUrl_(yearMonth) });
+  var tagUrl = getTagRedirectUrl_(yearMonth);
+  return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl, tagRedirectUrl: tagUrl, _debug_tagYm: yearMonth, _debug_tagFound: tagUrl || '(なし)' });
 }
 
 function getTagRedirectUrl_(yearMonth) {
