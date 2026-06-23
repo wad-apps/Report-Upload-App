@@ -3,3 +3,4 @@ docs/**
 *.md
 Direction/**
 node_modules/**
+tests/**
