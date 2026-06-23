@@ -53,6 +53,11 @@ function setupSheets() {
       name: SHEET_UNREGISTERED,
       // [0]timestamp [1]uid [2]displayName
       headers: ['タイムスタンプ', 'LINEユーザーID', '表示名']
+    },
+    {
+      name: SHEET_TAG_URL,
+      // [0]yearMonth [1]tagRedirectUrl
+      headers: ['年月', 'タグ流入URL']
     }
   ];
 

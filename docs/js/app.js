@@ -18,6 +18,7 @@ var state = {
   splitResult:      null, // ファイル選択時にバックグラウンドで前処理した分割結果
   splitResultFor:   null, // splitResult が対応するファイルオブジェクト
   lineAccessToken:  null,
+  tagRedirectUrl:   null, // 送信完了後にサーバーから返るLステップ流入URL（月ごとに異なる）
 };
 
 // ===== 初期化 =====
@@ -278,9 +279,11 @@ function setupEventListeners() {
   });
 
   document.getElementById('btn-to-line').addEventListener('click', function() {
-    if (TAG_REDIRECT_URL) {
+    // state.tagRedirectUrl（月別・サーバーから取得）を優先、なければ config.js のフォールバック値を使用
+    var redirectUrl = state.tagRedirectUrl || TAG_REDIRECT_URL;
+    if (redirectUrl) {
       // 流入URLにサイレントアクセスしてタグを登録してからLINEに戻る
-      fetch(TAG_REDIRECT_URL, { mode: 'no-cors' })
+      fetch(redirectUrl, { mode: 'no-cors' })
         .catch(function() {})
         .then(function() { liff.closeWindow(); });
     } else {
@@ -394,7 +397,10 @@ function doSubmit(yearMonth) {
       });
 
   Promise.all([
-    uploadReport(yearMonth, state.selectedFile, uploadId),
+    uploadReport(yearMonth, state.selectedFile, uploadId).then(function(res) {
+      if (res && res.tagRedirectUrl) state.tagRedirectUrl = res.tagRedirectUrl;
+      return res;
+    }),
     originalPromise,
   ])
     .then(function() {
