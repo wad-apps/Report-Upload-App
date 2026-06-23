@@ -135,10 +135,8 @@ function loadDashboard(force) {
 
   adminPost({ action: 'adminGetDriverList', idToken: state.idToken, yearMonth: ym })
     .then(function(res) {
-      var totalOverKm = (res.drivers || []).reduce(function(sum, d) { return sum + (d.totalOverKm || 0); }, 0);
-      var enrichedStats = Object.assign({}, res.stats, { totalOverKm: totalOverKm });
-      cachedListData = { drivers: res.drivers, stats: enrichedStats, yearMonth: ym };
-      renderStats(enrichedStats);
+      cachedListData = { drivers: res.drivers, stats: res.stats, yearMonth: ym };
+      renderStats(res.stats);
       renderDriverTable(res.drivers);
     }).catch(function() {});
 }
@@ -149,7 +147,6 @@ function renderStats(stats) {
   document.getElementById('stat-pending').textContent   = stats.pending;
   document.getElementById('stat-confirmed').textContent = stats.confirmed;
   document.getElementById('stat-error').textContent     = stats.ocrError;
-  document.getElementById('stat-over-km').textContent   = (stats.totalOverKm != null ? stats.totalOverKm : '-') + (stats.totalOverKm != null ? ' km' : '');
 }
 
 // ===== ドライバー一覧レンダリング =====

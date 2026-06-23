@@ -8,7 +8,7 @@ function calcDailyOverKm(distance) {
 }
 
 // ocrRows: 各要素は [fixedDistance, ocrDistance, fixedKosu, ocrKosu]
-// fixedXxx が null / '' / 0 なら ocrXxx を採用（0 はありえないので falsy で判定）
+// fixedXxx が null または '' のとき ocrXxx を採用。0 は有効な修正値として扱う。
 function calcMonthlyStats(ocrRows) {
   var totalDistance = 0;
   var totalKosu     = 0;

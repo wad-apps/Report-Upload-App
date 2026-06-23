@@ -41,5 +41,24 @@ var ocrRowsWithNonWorking = [
 var totals3 = calcMonthlyTotals(ocrRowsWithNonWorking);
 checkNum(totals3.totalOverKm, 150, '超過km合計 = 150（稼働なし日は0km）');
 
+console.log('--- fixedDistance=0 / fixedKosu=0 は有効な修正値 ---');
+var rowsZeroFix = [
+  [0, 150, 0, 8, true],   // 0km修正・0件修正 → 0 を採用（150や8へフォールバックしない）
+  [null, 50, null, 2, true],
+];
+var totals4 = calcMonthlyTotals(rowsZeroFix);
+checkNum(totals4.totalDistance,  50, 'fixedDistance=0 は 0km 採用');
+checkNum(totals4.totalKosu,       2, 'fixedKosu=0 は 0 採用');
+checkNum(totals4.totalOverKm,     0, '0+50=50km → 超過なし');
+
+console.log('--- 境界値: 全日 100km ちょうど ---');
+var rowsAtThreshold = [
+  [null, 100, null, 1, true],
+  [null, 100, null, 1, true],
+  [null, 100, null, 1, true],
+];
+var totals5 = calcMonthlyTotals(rowsAtThreshold);
+checkNum(totals5.totalOverKm, 0, '全日 100km ちょうど → 超過km合計 = 0');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

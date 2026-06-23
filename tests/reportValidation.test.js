@@ -60,5 +60,19 @@ checkEq(
   '不正JSON → フォールバック ok:true'
 );
 
+// reason が空文字 → null に正規化
+checkEq(
+  parseValidationResult('{"isReport":true,"canRead":true,"reason":""}'),
+  { isReport: true, canRead: true, reason: null },
+  'reason が空文字 → null に正規化'
+);
+
+// isReport/canRead フィールドが欠損 → trueにフォールバック
+checkEq(
+  parseValidationResult('{}'),
+  { isReport: true, canRead: true, reason: null },
+  'フィールド欠損 → すべて安全側フォールバック'
+);
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

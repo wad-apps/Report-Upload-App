@@ -57,7 +57,7 @@ function setupSheets() {
     {
       name: SHEET_TAG_URL,
       // [0]yearMonth [1]tagRedirectUrl
-      headers: ['年月', 'タグ流入URL']
+      headers: ['年月', 'LステップタグURL']
     }
   ];
 

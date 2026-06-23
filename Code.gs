@@ -8,7 +8,7 @@ var SHEET_EXPENSE      = '立替明細';
 var SHEET_ATTACHMENT   = '添付ファイル';
 var SHEET_LOG          = '操作ログ';
 var SHEET_UNREGISTERED = '未登録ドライバー';
-var SHEET_TAG_URL      = 'タグURL';
+var SHEET_TAG_URL      = 'LステップタグURL';
 
 var ALLOWED_MIME_TYPES_ = { 'image/jpeg': true, 'image/png': true, 'image/heic': true, 'image/heif': true, 'application/pdf': true };
 var MAX_BASE64_LEN_     = 70 * 1024 * 1024; // ~50MB 相当（base64は元サイズの約4/3）

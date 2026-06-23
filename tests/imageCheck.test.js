@@ -66,5 +66,20 @@ checkEq(classifyQuality(1200, 900, 10,  200, cfg),  { ok: false, reason: 'dark',
 checkEq(classifyQuality(1200, 900, 250, 200, cfg),  { ok: false, reason: 'bright',     message: '白飛びしています。明るさを調整して撮り直してください' }, '白飛び → bright NG');
 checkEq(classifyQuality(1200, 900, 128,  10, cfg),  { ok: false, reason: 'blur',       message: 'ピントが合っていません。撮り直してください' },           'ピンぼけ → blur NG');
 
+// --- 境界値テスト ---
+console.log('--- classifyQuality 境界値 ---');
+// 長辺ちょうど 800px → OK
+checkEq(classifyQuality(800, 600, 128, 200, cfg), { ok: true }, '長辺800px ちょうど → OK');
+// 長辺 799px → NG
+checkEq(classifyQuality(799, 600, 128, 200, cfg), { ok: false, reason: 'resolution', message: '画像が小さすぎます。もう一度撮影してください' }, '長辺799px → resolution NG');
+// 輝度ちょうど下限 30 → OK
+checkEq(classifyQuality(1200, 900, 30,  200, cfg), { ok: true }, '輝度30 ちょうど → OK');
+// 輝度ちょうど上限 240 → OK
+checkEq(classifyQuality(1200, 900, 240, 200, cfg), { ok: true }, '輝度240 ちょうど → OK');
+// ブラー分散ちょうど 50 → OK
+checkEq(classifyQuality(1200, 900, 128,  50, cfg), { ok: true }, 'blurVar=50 ちょうど → OK');
+// ブラー分散 49 → NG
+checkEq(classifyQuality(1200, 900, 128,  49, cfg), { ok: false, reason: 'blur', message: 'ピントが合っていません。撮り直してください' }, 'blurVar=49 → blur NG');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);
