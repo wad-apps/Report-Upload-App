@@ -403,7 +403,6 @@ function doSubmit(yearMonth) {
   Promise.all([
     uploadReport(yearMonth, state.selectedFile, uploadId).then(function(res) {
       if (res && res.tagRedirectUrl) state.tagRedirectUrl = res.tagRedirectUrl;
-      if (res) { state._debugTag = 'GAS検索年月: ' + (res._debug_tagYm || '?') + ' / 結果: ' + (res._debug_tagFound || '?'); }
       return res;
     }),
     originalPromise,
@@ -417,11 +416,6 @@ function doSubmit(yearMonth) {
       showOverlay(false);
       var ym = yearMonth.replace('-', '年') + '月';
       document.getElementById('done-message').textContent = ym + '分の月報を送信しました';
-      var tagUrlEl = document.getElementById('done-tag-url');
-      var tagUrl = state.tagRedirectUrl || TAG_REDIRECT_URL;
-      var debugText = state._debugTag || '';
-      if (tagUrl) { tagUrlEl.textContent = '↩ 遷移先: ' + tagUrl + (debugText ? '\n' + debugText : ''); tagUrlEl.style.display = ''; }
-      else        { tagUrlEl.textContent = debugText || '(URLなし)'; tagUrlEl.style.display = ''; }
       showScreen('done');
       if (originalFailed) {
         showToast('原本ファイルの保存に失敗しました。\n' + (originalError || '担当者にお知らせください。'));

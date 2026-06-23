@@ -221,8 +221,6 @@ function handleUploadReport(payload) {
     fileUrl:        fileUrl,
     workingDays:    ocrResult ? ocrResult.workingDays : null,
     tagRedirectUrl: tagUrl,
-    _debug_tagYm:   yearMonth,
-    _debug_tagFound: tagUrl || '(なし)',
   });
 }
 
@@ -268,8 +266,7 @@ function handleUploadAttachment(payload) {
     uploadId,           // [9] アップロードID
   ]);
 
-  var tagUrl = getTagRedirectUrl_(yearMonth);
-  return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl, tagRedirectUrl: tagUrl, _debug_tagYm: yearMonth, _debug_tagFound: tagUrl || '(なし)' });
+  return jsonResponse({ status: 'ok', fileId: fileId, fileUrl: fileUrl });
 }
 
 function getTagRedirectUrl_(yearMonth) {
