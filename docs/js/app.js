@@ -137,7 +137,7 @@ function uploadOriginal(yearMonth, file, uploadId) {
         lineAccessToken: state.lineAccessToken,
         site:            site,
         yearMonth:       yearMonth,
-        mimeType:        file.type,
+        mimeType:        file.type || 'image/jpeg',
         fileBase64:      base64,
         fileName:        file.name,
         uploadId:        uploadId,

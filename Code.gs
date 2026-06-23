@@ -279,7 +279,7 @@ function handleUploadOriginal(payload) {
     return jsonResponse({ error: 'confirmed' });
   }
 
-  var mimeType = payload.mimeType;
+  var mimeType = payload.mimeType || 'image/jpeg'; // 空文字対策（iOS HEIC ギャラリー選択時に file.type が '' になる場合がある）
   var base64   = payload.fileBase64;
   var uploadId = payload.uploadId || '';
   var origName = payload.fileName || 'original';
