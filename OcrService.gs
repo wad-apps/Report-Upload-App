@@ -6,15 +6,21 @@ var CLAUDE_MODEL   = PropertiesService.getScriptProperties().getProperty('CLAUDE
 
 var OCR_PROMPT_DAYS = [
   'これはドライバーの月次稼働報告書の画像です。',
-  '日付ごとに「開始時間」「終了時間」を読み取り、',
+  '日付ごとに「開始時間」「終了時間」「個数」「距離(km)」を読み取り、',
   '次のJSON形式のみで返してください。',
   '',
-  '{"days":[{"day":1,"start":"08:00","end":"17:30"}, ...]}',
+  '{"days":[{"day":1,"start":"08:00","end":"17:30","kosu":95,"distance":72}, ...]}',
   '',
   '- day: 帳票の日付の数字（1〜31の整数）',
   '- start/end: HH:MM。記入なしはnull',
+  '- kosu: 「個数」欄の整数。記入なしはnull',
+  '- distance: 「距離(km)」欄の数値（単位・記号を除いた数値のみ）。記入なしはnull',
   '- 合計行・集計欄・立替欄・備考欄は読まない',
   '- JSONブロックのみを返し説明文は不要',
+  '',
+  '【列の取り違えに注意】',
+  '- 「個数」列と「距離(km)」列は隣接する。列見出しを確認し、値を入れ替えない',
+  '- 距離は100以上（3桁）になる日がある。桁の脱落・切り捨てに注意',
   '',
   '【手書き数字の混同に注意】',
   '- 1 と 7: 1は縦線のみ。7は頂部に横棒がある（欧風では中央にも横棒が入ることがある）',
@@ -261,6 +267,10 @@ function writeOcrResults_(lineUserId, driverName, yearMonth, fileId, days, uploa
       '',                // [10] 修正後終了時間
       fileId,            // [11] 受信ファイルID
       uploadId || '',    // [12] アップロードID
+      (d.kosu     == null) ? '' : d.kosu,     // [13] 個数（OCR）
+      (d.distance == null) ? '' : d.distance, // [14] 走行距離(km)（OCR）
+      '',                // [15] 修正後個数（手入力用・空で初期化）
+      '',                // [16] 修正後走行距離（手入力用・空で初期化）
     ];
   });
 
