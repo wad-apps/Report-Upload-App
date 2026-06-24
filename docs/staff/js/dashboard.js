@@ -163,9 +163,9 @@ function renderDriverTable(drivers) {
     var ocrTime      = d.ocrTime || '-';
     var btnLabel     = d.isConfirmed ? '確認済み' : '確認する';
     var btnDisabled  = d.status !== '確認待ち' && d.status !== '確定' ? 'disabled' : '';
-    var distText     = d.isConfirmed && d.totalDistance ? d.totalDistance + ' km' : '-';
-    var overKmText   = d.isConfirmed && d.totalOverKm   ? d.totalOverKm   + ' km' : '-';
-    var overKmStyle  = d.isConfirmed && d.totalOverKm > 0 ? ' style="color:var(--warning);font-weight:600"' : '';
+    var distText     = d.totalDistance ? d.totalDistance + ' km' : '-';
+    var overKmText   = d.totalOverKm   ? d.totalOverKm   + ' km' : '-';
+    var overKmStyle  = d.totalOverKm > 0 ? ' style="color:var(--warning);font-weight:600"' : '';
     var fileLink     = d.fileUrl
       ? '<a href="' + escHtml(d.fileUrl) + '" target="_blank" class="btn btn-sm btn-ghost">画像 ↗</a>'
       : '';

@@ -141,6 +141,21 @@ function handleAdminGetDriverList_(payload) {
     if (isWorking) workingDaysMap[key] = (workingDaysMap[key] || 0) + 1;
   });
 
+  // OCR集計（確認前プレビュー用）。SHEET_OCR: [13]=ocrKosu, [14]=ocrDistance, [15]=fixedKosu, [16]=fixedDistance
+  var ocrTotalsMap = {};
+  ocrData.slice(1).forEach(function(row) {
+    if (normalizeYearMonth_(row[3]) !== yearMonth) return;
+    var uid  = row[0];
+    var site = row[2] || '';
+    var key  = uid + '|' + site;
+    var dist = (row[16] !== null && row[16] !== '') ? sheetValueToNumber_(row[16]) : sheetValueToNumber_(row[14]);
+    var kosu = (row[15] !== null && row[15] !== '') ? sheetValueToNumber_(row[15]) : sheetValueToNumber_(row[13]);
+    if (!ocrTotalsMap[key]) ocrTotalsMap[key] = { totalKosu: 0, totalDistance: 0, totalOverKm: 0 };
+    ocrTotalsMap[key].totalDistance += dist;
+    ocrTotalsMap[key].totalKosu     += kosu;
+    ocrTotalsMap[key].totalOverKm   += calcDailyOverKm_(dist);
+  });
+
   // 月次確定データ。SHEET_MONTHLY: [2]=site, [3]=yearMonth, [8]=billingAmount, [11]=totalKosu, [12]=totalDistance, [13]=totalOverKm
   var confirmedMap = {};
   monthlyData.slice(1).forEach(function(row) {
@@ -177,9 +192,9 @@ function handleAdminGetDriverList_(payload) {
       workingDays:    wd,
       billingAmount:  confirmedMap[key] ? confirmedMap[key].billingAmount : wd * up,
       isConfirmed:    !!confirmedMap[key],
-      totalKosu:      confirmedMap[key] ? confirmedMap[key].totalKosu     : 0,
-      totalDistance:  confirmedMap[key] ? confirmedMap[key].totalDistance : 0,
-      totalOverKm:    confirmedMap[key] ? confirmedMap[key].totalOverKm   : 0,
+      totalKosu:      confirmedMap[key] ? confirmedMap[key].totalKosu     : (ocrTotalsMap[key] ? ocrTotalsMap[key].totalKosu     : 0),
+      totalDistance:  confirmedMap[key] ? confirmedMap[key].totalDistance : (ocrTotalsMap[key] ? ocrTotalsMap[key].totalDistance : 0),
+      totalOverKm:    confirmedMap[key] ? confirmedMap[key].totalOverKm   : (ocrTotalsMap[key] ? ocrTotalsMap[key].totalOverKm   : 0),
       folderUrl:      sub.folderUrl || folderUrlMap[folderName] || '',
       originalFileId: sub.originalFileId || '',
     };
