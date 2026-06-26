@@ -325,6 +325,22 @@ function handleAdminSaveCorrection_(payload, email) {
   var corrections = payload.corrections; // [{ day, fixedStart, fixedEnd, fixedKosu?, fixedDistance? }]
   var silent      = !!payload.silent;   // trueのとき操作ログを記録しない（確定前の自動保存用）
 
+  if (isMonthConfirmed_(lineUserId, yearMonth, site)) {
+    return jsonResponse({ error: 'confirmed' });
+  }
+
+  // 時刻・数値バリデーション（無効文字列・負数を拒否）
+  var TIME_RE_ = /^(?:[01]?\d|2[0-3]):[0-5]\d$/;
+  for (var ci = 0; ci < corrections.length; ci++) {
+    var corr = corrections[ci];
+    if (corr.fixedStart && !TIME_RE_.test(String(corr.fixedStart))) return jsonResponse({ error: 'invalid_value' });
+    if (corr.fixedEnd   && !TIME_RE_.test(String(corr.fixedEnd)))   return jsonResponse({ error: 'invalid_value' });
+    var fkVal = (corr.fixedKosu     !== undefined && corr.fixedKosu     !== null) ? Number(corr.fixedKosu)     : undefined;
+    var fdVal = (corr.fixedDistance !== undefined && corr.fixedDistance !== null) ? Number(corr.fixedDistance) : undefined;
+    if (fkVal !== undefined && fkVal < 0) return jsonResponse({ error: 'invalid_value' });
+    if (fdVal !== undefined && fdVal < 0) return jsonResponse({ error: 'invalid_value' });
+  }
+
   var driver     = getDriverByUserIdAndSite_(lineUserId, site);
   var driverName = driver ? driver.name : '';
 

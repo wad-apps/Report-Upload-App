@@ -207,7 +207,6 @@ function handleUploadReport(payload) {
       if (attData[j][1] === driver.lineUserId &&
           normalizeYearMonth_(attData[j][4]) === yearMonth &&
           (attData[j][3] || '') === site) {
-        trashDriveFile_(attData[j][7]); // [7] = DriveファイルID
         attSheet.deleteRow(j + 1);
       }
     }

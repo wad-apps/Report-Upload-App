@@ -40,5 +40,19 @@ check(
   '距離だけ修正 → 個数は空、距離は保存'
 );
 
+// ケース5: null 送信（空欄クリア）→ 修正値なし扱い（Fix 4 対応確認）
+check(
+  resolveCorrectedValues({ fixedKosu: null, fixedDistance: null }, { ocrKosu: 5, ocrDistance: 120 }),
+  { newFixedKosu: '', newFixedDistance: '' },
+  'null（空欄クリア）→ 修正値なし扱い'
+);
+
+// ケース6: 0 送信（明示的ゼロ修正）→ OCR 値が 0 以外なら修正値として保存
+check(
+  resolveCorrectedValues({ fixedKosu: 0, fixedDistance: 0 }, { ocrKosu: 5, ocrDistance: 120 }),
+  { newFixedKosu: 0, newFixedDistance: 0 },
+  '0 を明示的に指定 → 0 として保存（OCR 値と異なるため修正扱い）'
+);
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

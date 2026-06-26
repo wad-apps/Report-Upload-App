@@ -399,8 +399,8 @@ function handleSaveCorrection(silent) {
       day:           parseInt(startInput.dataset.day, 10),
       fixedStart:    startInput.value.trim(),
       fixedEnd:      endInput.value.trim(),
-      fixedKosu:     kosuInput  ? (parseFloat(kosuInput.value)  || 0) : 0,
-      fixedDistance: distInput  ? (parseFloat(distInput.value)  || 0) : 0,
+      fixedKosu:     kosuInput  ? (kosuInput.value.trim()  === '' ? null : (parseFloat(kosuInput.value)  || 0)) : null,
+      fixedDistance: distInput  ? (distInput.value.trim()  === '' ? null : (parseFloat(distInput.value)  || 0)) : null,
     });
   });
 
