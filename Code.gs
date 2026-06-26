@@ -144,6 +144,24 @@ function handleUploadReport(payload) {
   var fileName  = uploadId ? (uploadId + '_' + origName) : origName;
   var fileType  = mimeType === 'application/pdf' ? 'pdf' : 'image';
 
+  // バリデーション（ファイル保存前に実行。isReport=false のみブロック）
+  var validationWarning = false;
+  var validationReason  = null;
+  try {
+    var valBase64   = fileType === 'pdf' ? base64 : (payload.fileBase64First || base64);
+    var valMimeType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
+    var valResult   = runReportValidation_(valBase64, valMimeType);
+    if (!valResult.isReport) {
+      return jsonResponse({ error: 'invalid_report', reason: valResult.reason });
+    }
+    if (!valResult.canRead) {
+      validationWarning = true;
+      validationReason  = valResult.reason;
+    }
+  } catch (valErr) {
+    Logger.log('validation error: ' + valErr.message);
+  }
+
   // Drive に保存
   var driveResult = saveFileToDrive_(driver, yearMonth, mimeType, base64, fileName);
   var fileId      = driveResult.fileId;
@@ -199,21 +217,6 @@ function handleUploadReport(payload) {
     folderUrl,                     // [14] フォルダURL
     fileType === 'pdf' ? fileId : '', // [15] 原本ファイルID（PDF=表示用と同一、画像=uploadOriginalで後から書き込む）
   ]);
-
-  // 月報らしさ・判読可能性チェック（警告のみ、提出をブロックしない）
-  var validationWarning = false;
-  var validationReason  = null;
-  try {
-    var valBase64   = fileType === 'pdf' ? base64 : (payload.fileBase64First || base64);
-    var valMimeType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
-    var valResult   = runReportValidation_(valBase64, valMimeType);
-    if (!valResult.isReport || !valResult.canRead) {
-      validationWarning = true;
-      validationReason  = valResult.reason;
-    }
-  } catch (valErr) {
-    Logger.log('validation error: ' + valErr.message);
-  }
 
   // OCR実行（失敗してもアップロード自体は成功扱い）
   var ocrResult = null;

@@ -324,7 +324,11 @@ function gasPost(payload) {
   })
   .then(function(res) { return res.json(); })
   .then(function(json) {
-    if (json.error) throw new Error(json.error);
+    if (json.error) {
+      var err = new Error(json.error);
+      if (json.reason) err.reason = json.reason;
+      throw err;
+    }
     return json;
   });
 }
@@ -548,6 +552,10 @@ function doSubmit(yearMonth) {
       showOverlay(false);
       if (err.message === 'confirmed') {
         showToast('この月の報告書はすでに確定済みです。変更が必要な場合は担当者へご連絡ください。');
+      } else if (err.message === 'invalid_report') {
+        var msg = '月報として認識できませんでした。正しい月報の画像を選んでください。';
+        if (err.reason) msg += '\n（' + err.reason + '）';
+        showToast(msg);
       } else {
         showToast('送信失敗: ' + err.message);
       }
