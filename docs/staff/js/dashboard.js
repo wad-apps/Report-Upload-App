@@ -492,6 +492,14 @@ function renderExportTable(rows) {
   }).join('');
 }
 
+// CSV インジェクション防止: 数式先頭文字を無害化し、内部の " をエスケープ
+function csvSafe_(val) {
+  var str = (val === null || val === undefined) ? '' : String(val);
+  str = str.replace(/"/g, '""');                          // " → "" (CSV エスケープ)
+  if (/^[=+\-@\t\r|%]/.test(str)) str = "'" + str;      // 数式インジェクション防止
+  return str;
+}
+
 function downloadCsv() {
   if (!state.exportData) return;
   var rows    = state.exportData;
@@ -499,8 +507,8 @@ function downloadCsv() {
   var csv     = [headers.join(',')];
   rows.forEach(function(r) {
     csv.push([
-      '"' + (r.driverName    || '') + '"',
-      '"' + (r.site          || '') + '"',
+      '"' + csvSafe_(r.driverName) + '"',
+      '"' + csvSafe_(r.site)       + '"',
       r.workingDays    || 0,
       r.totalHours     || 0,
       r.unitPrice      || 0,

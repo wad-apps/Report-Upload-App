@@ -90,18 +90,27 @@ function saveUnregisteredDriver_(lineUserId, displayName) {
       sheet.getRange(1, 1, 1, 3).setValues([['タイムスタンプ', 'LINEユーザーID', '表示名']]);
       sheet.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
     }
+    var safeName = sanitizeSheetValue_(displayName);
     // 同一UIDが既にあればタイムスタンプ・表示名を上書き（重複蓄積を防ぐ）
     var data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
       if (data[i][1] === lineUserId) {
-        sheet.getRange(i + 1, 1, 1, 3).setValues([[new Date(), lineUserId, displayName]]);
+        sheet.getRange(i + 1, 1, 1, 3).setValues([[new Date(), lineUserId, safeName]]);
         return;
       }
     }
-    sheet.appendRow([new Date(), lineUserId, displayName]);
+    sheet.appendRow([new Date(), lineUserId, safeName]);
   } catch (e) {
     Logger.log('saveUnregisteredDriver_ error: ' + e.message);
   }
+}
+
+// Sheets 数式インジェクション防止: = + - @ \t \r で始まる文字列に ' を付与
+// GAS で setValue("'=formula") すると Sheets がテキストとして扱い数式を実行しない
+function sanitizeSheetValue_(val) {
+  if (val === null || val === undefined) return val;
+  var str = String(val);
+  return /^[=+\-@\t\r|%]/.test(str) ? "'" + str : str;
 }
 
 // マスタに当該UIDの行が1つでも存在するか（稼働/停止を問わない）
@@ -600,6 +609,10 @@ function validateUploadPayload_(payload) {
   var mime = payload.mimeType || 'image/jpeg';
   if (!ALLOWED_MIME_TYPES_[mime]) {
     return 'invalid mimeType';
+  }
+  var uploadId = payload.uploadId || '';
+  if (uploadId && !/^[A-Za-z0-9_\-]{1,32}$/.test(uploadId)) {
+    return 'invalid uploadId';
   }
   var fields = ['fileBase64', 'fileBase64First', 'fileBase64Second'];
   for (var i = 0; i < fields.length; i++) {
