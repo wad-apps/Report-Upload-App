@@ -184,6 +184,20 @@ function handleUploadReport(payload) {
     }
   }
 
+  // 同一人・同一月・同一現場の既存OCR行を削除（OCR失敗時に古い行が残らないよう）
+  // SHEET_OCR: [0]=uid, [2]=site, [3]=yearMonth
+  var ocrSheet = ss.getSheetByName(SHEET_OCR);
+  if (ocrSheet) {
+    var ocrData = ocrSheet.getDataRange().getValues();
+    for (var k = ocrData.length - 1; k >= 1; k--) {
+      if (ocrData[k][0] === driver.lineUserId &&
+          normalizeYearMonth_(ocrData[k][3]) === yearMonth &&
+          (ocrData[k][2] || '') === site) {
+        ocrSheet.deleteRow(k + 1);
+      }
+    }
+  }
+
   // 同一人・同一月・同一現場の既存添付行を削除（Driveファイルごと）
   // SHEET_ATTACHMENT: [1]=uid, [3]=site, [4]=yearMonth, [7]=fileId
   var attSheet = ss.getSheetByName(SHEET_ATTACHMENT);

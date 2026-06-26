@@ -516,21 +516,18 @@ function doSubmit(yearMonth) {
   var originalFailed = false;
   var originalError  = '';
   var reportRes      = null;
-  var originalPromise = isPdf
-    ? Promise.resolve()
-    : uploadOriginal(yearMonth, state.selectedFile, uploadId).catch(function(err) {
+
+  uploadReport(yearMonth, state.selectedFile, uploadId)
+    .then(function(res) {
+      reportRes = res;
+      if (res && res.tagRedirectUrl) state.tagRedirectUrl = res.tagRedirectUrl;
+      if (isPdf) return Promise.resolve();
+      // uploadReport 完了後に直列実行（SHEET_RECEIVED 行が確実に存在してから原本を保存）
+      return uploadOriginal(yearMonth, state.selectedFile, uploadId).catch(function(err) {
         originalFailed = true;
         originalError  = (err && err.message) ? err.message : String(err || '');
       });
-
-  Promise.all([
-    uploadReport(yearMonth, state.selectedFile, uploadId).then(function(res) {
-      reportRes = res;
-      if (res && res.tagRedirectUrl) state.tagRedirectUrl = res.tagRedirectUrl;
-      return res;
-    }),
-    originalPromise,
-  ])
+    })
     .then(function() {
       if (state.attachmentFiles.length === 0) return Promise.resolve();
       updateOverlayText('添付ファイルをアップロード中...');
